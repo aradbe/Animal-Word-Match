@@ -1,10 +1,7 @@
 import { Navigate } from "react-router-dom";
 
 
-//mock זמני
-//בהמשך:
-//isLoggedIn
-//isAdmin
+
 //יגיעו מה-Auth MobX store.
 
 function AdminRoute({ children }) {
