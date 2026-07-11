@@ -1,10 +1,15 @@
 //import { useState } from 'react'
+import { MantineProvider } from "@mantine/core";
 import AppRouter from "./router/AppRouter";
 import "./App.css";
 
 
 function App() {
-  return <AppRouter />;
+  return (
+    <MantineProvider>
+      <AppRouter />
+    </MantineProvider>
+  );
 }
 
 export default App;

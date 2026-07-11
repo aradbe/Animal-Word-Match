@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Container, Stack, Text, Title, Button } from '@mantine/core'
-import { mockQuestions } from '../data/mockQuestions'
-import { shuffle } from '../lib/shuffle'
-import QuestionCard from '../components/QuestionCard'
-import AnswerButton from '../components/AnswerButton'
+import { MOCK_QUESTIONS } from '../../data/mockQuestions'
+import { shuffle } from '../../utils/shuffle'
+import QuestionCard from './QuestionCard'
+import AnswerButton from './AnswerButton'
 
 function GamePage() {
     const [index, setIndex] = useState(0)
     const [selected, setSelected] = useState(null)
     const [finished, setFinished] = useState(false)
 
-    const question = mockQuestions[index]
-    const isLast = index === mockQuestions.length - 1
+    const question = MOCK_QUESTIONS[index]
+    const isLast = index === MOCK_QUESTIONS.length - 1
     const answered = selected !== null
 
     const answers = useMemo(
@@ -51,7 +51,7 @@ function GamePage() {
         <Container size="sm" py="xl">
             <Stack gap="lg">
                 <Text ta="center" fw={500} c="dimmed">
-                    Question {index + 1} of {mockQuestions.length}
+                    Question {index + 1} of {MOCK_QUESTIONS.length}
                 </Text>
 
                 <QuestionCard question={question} />
