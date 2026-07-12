@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Container, Stack, Text, Title, Button } from '@mantine/core'
+//import { Container, Stack, Text, Title, Button } from '@mantine/core'
+import { Container, Stack, Text, Button } from '@mantine/core'
+
 import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
 import QuestionCard from './QuestionCard'
