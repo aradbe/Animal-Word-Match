@@ -2,17 +2,14 @@
 -- Animal Word Match - Supabase Database Setup
 -- ============================================================
 --
--- This file creates:
---   1. profiles table
---   2. questions table
---   3. game_results table
---   4. automatic profile creation trigger
---   5. indexes
---   6. Row Level Security policies
---   7. initial mock questions
+-- Access rules:
+--   - Guests and logged-in users can read questions and play.
+--   - Only logged-in users can save and read their own results.
+--   - Users can only read and update their own profile.
 --
--- The "animal-images" Storage bucket was created manually
--- through the Supabase dashboard and is not created here.
+-- Note:
+--   The "animal-images" Storage bucket was created manually
+--   in the Supabase dashboard.
 -- ============================================================
 
 
@@ -20,7 +17,6 @@
 -- EXTENSIONS
 -- ============================================================
 
--- Used to generate UUID values
 create extension if not exists pgcrypto;
 
 
@@ -44,7 +40,7 @@ create table if not exists public.profiles (
 -- AUTOMATIC PROFILE CREATION
 -- ============================================================
 
--- Creates a row in public.profiles whenever a new user signs up
+-- Creates a profile whenever a new user registers.
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -70,8 +66,6 @@ begin
 end;
 $$;
 
-
--- Remove the trigger first so this setup file can be run again safely
 
 drop trigger if exists on_auth_user_created
 on auth.users;
@@ -119,10 +113,14 @@ create table if not exists public.questions (
     default now(),
 
   constraint questions_have_three_distractors
-    check (cardinality(distractors) = 3),
+    check (
+      cardinality(distractors) = 3
+    ),
 
   constraint question_level_is_positive
-    check (level > 0),
+    check (
+      level > 0
+    ),
 
   constraint correct_word_not_in_distractors
     check (
@@ -131,10 +129,11 @@ create table if not exists public.questions (
 );
 
 
--- Improves filtering questions by topic and level
-
 create index if not exists questions_topic_level_index
-on public.questions (topic, level);
+on public.questions (
+  topic,
+  level
+);
 
 
 -- ============================================================
@@ -162,17 +161,21 @@ create table if not exists public.game_results (
     default now(),
 
   constraint score_is_not_negative
-    check (score >= 0),
+    check (
+      score >= 0
+    ),
 
   constraint total_questions_is_positive
-    check (total_questions > 0),
+    check (
+      total_questions > 0
+    ),
 
   constraint score_not_above_total
-    check (score <= total_questions)
+    check (
+      score <= total_questions
+    )
 );
 
-
--- Improves loading a user's game history
 
 create index if not exists game_results_user_date_index
 on public.game_results (
@@ -196,11 +199,55 @@ enable row level security;
 
 
 -- ============================================================
--- PROFILES RLS POLICIES
+-- TABLE PERMISSIONS
 -- ============================================================
---
--- A user can only read or update their own profile.
--- Profile creation is handled by the signup trigger.
+
+-- Guests cannot access profiles.
+
+revoke all
+on public.profiles
+from anon;
+
+
+-- Guests cannot access saved game results.
+
+revoke all
+on public.game_results
+from anon;
+
+
+-- Logged-in users can read and update profiles.
+-- RLS will ensure that they only access their own profile.
+
+grant select, update
+on public.profiles
+to authenticated;
+
+
+-- Guests and logged-in users can read questions.
+
+grant select
+on public.questions
+to anon, authenticated;
+
+
+-- Frontend users cannot create, edit, or delete questions.
+
+revoke insert, update, delete
+on public.questions
+from anon, authenticated;
+
+
+-- Logged-in users can read and save game results.
+-- RLS will ensure that they only access their own results.
+
+grant select, insert
+on public.game_results
+to authenticated;
+
+
+-- ============================================================
+-- PROFILES RLS POLICIES
 -- ============================================================
 
 drop policy if exists
@@ -238,29 +285,36 @@ with check (
 -- QUESTIONS RLS POLICIES
 -- ============================================================
 --
--- Logged-in users can read questions.
---
--- There are no insert, update, or delete policies for the
--- frontend, so normal users cannot modify the questions.
+-- Guests and logged-in users can read questions.
+-- No frontend role can insert, update, or delete questions.
 -- ============================================================
+
+-- Remove the previous registered-users-only policy.
 
 drop policy if exists
   "Authenticated users can read questions"
 on public.questions;
 
+drop policy if exists
+  "Anyone can read questions"
+on public.questions;
 
-create policy "Authenticated users can read questions"
+create policy "Anyone can read questions"
 on public.questions
 for select
-to authenticated
+to anon, authenticated
 using (true);
+
+grant select on public.questions
+to anon, authenticated;
 
 
 -- ============================================================
 -- GAME RESULTS RLS POLICIES
 -- ============================================================
 --
--- A user can only read and insert results belonging to them.
+-- Guests cannot save scores.
+-- Logged-in users can only read and save their own results.
 -- ============================================================
 
 drop policy if exists
@@ -353,17 +407,3 @@ values
 on conflict (id) do nothing;
 
 
--- ============================================================
--- OPTIONAL VERIFICATION QUERIES
--- ============================================================
---
--- Uncomment these lines when testing the setup in Supabase.
---
--- select * from public.profiles;
---
--- select *
--- from public.questions
--- order by created_at;
---
--- select * from public.game_results;
--- ============================================================F
