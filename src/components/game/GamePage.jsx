@@ -1,47 +1,45 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import { observer } from 'mobx-react-lite'
 import { Container, Stack, Text, Title, Button } from '@mantine/core'
-import { MOCK_QUESTIONS } from '../../data/mockQuestions'
+import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
 import QuestionCard from './QuestionCard'
 import AnswerButton from './AnswerButton'
+import ScoreBar from './ScoreBar'
 
-function GamePage() {
-    const [index, setIndex] = useState(0)
-    const [selected, setSelected] = useState(null)
-    const [finished, setFinished] = useState(false)
+// An observer component that just displays the store and calls its actions
 
-    const question = MOCK_QUESTIONS[index]
-    const isLast = index === MOCK_QUESTIONS.length - 1
-    const answered = selected !== null
+const GamePage = observer(function GamePage() {
+
+    useEffect(() => {
+        gameStore.startRound()
+    }, [])
+
+    const question = gameStore.currentQuestion
 
     const answers = useMemo(
-        () => shuffle([question.correct_word, ...question.distractors]),
+        () => (question ? shuffle([question.correct_word, ...question.distractors]) : []),
         [question]
     )
 
+    if (!question) {
+        return null
+    }
+
     function getStatus(word) {
-        if (!answered) return 'idle'
+        if (!gameStore.answered) return 'idle'
         if (word === question.correct_word) return 'correct'
-        if (word === selected) return 'wrong'
+        if (word === gameStore.selected) return 'wrong'
         return 'muted'
     }
 
-    function handleNext() {
-        if (isLast) {
-            setFinished(true)
-        } else {
-            setIndex(index + 1)
-            setSelected(null)
-        }
-    }
-
     // End of round — placeholder only. Real score/results screen is B2.
-    if (finished) {
+    if (gameStore.status === 'finished') {
         return (
             <Container size="sm" py="xl">
                 <Stack align="center" gap="md">
                     <Title order={2}>Round complete! 🎉</Title>
-                    <Text c="dimmed">(Score and results screen come in B2.)</Text>
+                    <Text c="dimmed">(Results screen come later)</Text>
                 </Stack>
             </Container>
         )
@@ -50,8 +48,9 @@ function GamePage() {
     return (
         <Container size="sm" py="xl">
             <Stack gap="lg">
+                <ScoreBar score={gameStore.score} streak={gameStore.streak}/>
                 <Text ta="center" fw={500} c="dimmed">
-                    Question {index + 1} of {MOCK_QUESTIONS.length}
+                    Question {gameStore.currentIndex + 1} of {gameStore.totalQuestions}
                 </Text>
 
                 <QuestionCard question={question} />
@@ -62,25 +61,25 @@ function GamePage() {
                             key={word}
                             word={word}
                             status={getStatus(word)}
-                            disabled={answered}
-                            onSelect={setSelected}
+                            disabled={gameStore.answered}
+                            onSelect={(w) => gameStore.selectAnswer(w)}
                         />
                     ))}
                 </Stack>
 
-                {answered && (
+                {gameStore.answered && (
                     <Stack align="center" gap="sm">
-                        <Text fw={700} c={selected === question.correct_word ? 'green' : 'red'}>
-                            {selected === question.correct_word ? 'Correct!' : 'Oops, wrong!'}
+                        <Text fw={700} c={gameStore.selected === question.correct_word ? 'green' : 'red'}>
+                            {gameStore.selected === question.correct_word ? 'Correct!' : 'Oops, wrong!'}
                         </Text>
-                        <Button onClick={handleNext} size="md">
-                            {isLast ? 'Finish' : 'Next'}
+                        <Button onClick={() => gameStore.next()} size="md">
+                            {gameStore.isLast ? 'Finish' : 'Next'}
                         </Button>
                     </Stack>
                 )}
             </Stack>
         </Container>
     )
-}
+})
 
 export default GamePage

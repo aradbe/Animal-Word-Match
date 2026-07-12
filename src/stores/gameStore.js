@@ -1,6 +1,8 @@
 import { makeAutoObservable } from 'mobx'
 import { MOCK_QUESTIONS } from '../data/mockQuestions'
 
+// A Mobx store: holds the game's data + the rules to change it, separete from the UI.
+
 class GameStore {
     // observable state
     questions = []
