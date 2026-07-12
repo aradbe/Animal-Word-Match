@@ -1,14 +1,12 @@
 import { Navigate } from "react-router-dom";
+import { observer } from "mobx-react-lite";
+import { authStore } from "../stores/authStore";
 
-//כרגע נעשה mock זמני. בהמשך זה יתחבר ל-authStore.
 function ProtectedRoute({ children }) {
 
-    const isLoggedIn = false;
-
-  if (!isLoggedIn) {
+ if (!authStore.isLoggedIn) {
     return <Navigate to="/access-denied" replace />;
   }
-
   return children;
 }
 
