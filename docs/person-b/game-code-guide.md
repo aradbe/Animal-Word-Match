@@ -1,148 +1,141 @@
-# Game feature — code guide (B1, post-integration)
+# Game feature — code guide (B1 + B2)
 
 A file-by-file explanation of Person B's game feature after **B1** (game UI on 5 mock
-questions, styled with Mantine) **and** integration into Ilan's (Person C) scaffold.
-Update this doc at the end of each future stage (B2–B5).
+questions) and **B2** (MobX store: score, streak, round, results), integrated into Ilan's
+(Person C) scaffold and merged with arad's (Person A) Supabase setup.
+Update this doc at the end of each future stage (B3–B5).
 
-> **Status:** B1 complete + integrated. The game renders through C's router at
-> `/#/game/play`. No score/streak yet (B2), still reads mock data directly (B3 swaps
-> to `questionService`).
+> **Status:** B1 + B2 complete. Game renders through C's router at `/#/game/play`, powered
+> by a MobX store, with live score/streak and a results screen. Still reads mock data
+> directly — the switch to `questionService` → Supabase is **B3**.
 
 ---
 
-## Where the files live now (flat structure, adopted from C)
+## Where the files live (flat structure, adopted from C)
 
 ```
-src/data/mockQuestions.js        the raw material — 5 questions, exported as MOCK_QUESTIONS
-src/utils/shuffle.js             a tool — randomizes the 4 answers
-src/components/game/QuestionCard.jsx  a brick — shows the animal image + prompt
-src/components/game/AnswerButton.jsx  a brick — one clickable answer
-src/components/game/GamePage.jsx      the screen — holds state, wires bricks + tool
-src/pages/GameRoundPage.jsx      C's route page (/game/play) — just renders <GamePage/>
+src/data/mockQuestions.js             5 questions, exported as MOCK_QUESTIONS (single source)
+src/utils/shuffle.js                  randomizes the 4 answers
+src/stores/gameStore.js               MobX store — all game state + rules (the brain)
+src/components/game/GamePage.jsx      the screen — an observer that displays the store
+src/components/game/QuestionCard.jsx  the animal image + prompt
+src/components/game/AnswerButton.jsx  one clickable answer
+src/components/game/ScoreBar.jsx      live score + streak badges
+src/components/game/ResultsCard.jsx   end-of-round result + "Play again"
+src/pages/GameRoundPage.jsx           C's route page (/game/play) — renders <GamePage/>
 ```
-
-Data flows **down** (page → components via props); events flow **up** (button click →
-page via a callback). The page is the brain; the components are simple and reusable.
 
 **How it reaches the screen:** C's `AppRouter` maps `/game/play` → `GameRoundPage` →
-which renders `<GamePage/>`. Mantine works because `App.jsx` wraps `<AppRouter/>` in
-`<MantineProvider>` and `main.jsx` imports `@mantine/core/styles.css`.
+`<GamePage/>`. Mantine works because `App.jsx` wraps `<AppRouter/>` in `<MantineProvider>`
+and `main.jsx` imports `@mantine/core/styles.css`.
+
+**The B2 shift:** in B1 the game state lived in `GamePage` via `useState`. In B2 it moved into
+`gameStore` (MobX), and `GamePage` became a pure `observer` that just reads the store and calls
+its actions.
 
 ---
 
 ## `src/data/mockQuestions.js`
 
-An array of 5 objects, each matching the agreed **`question` contract** exactly:
+Array of 5 objects matching the **`question` contract**:
+`{ id, image_url, correct_word, distractors:[3], level:1-3, topic, created_at }`.
 
-```
-{ id, image_url, correct_word, distractors: [3 words], level: 1-3, topic, created_at }
-```
-
-- Exported as **`MOCK_QUESTIONS`** — this is the **single source** for the whole app.
-  Both `GamePage` and C's `questionService` import it (we replaced C's Lion/Elephant
-  sample data with these).
-- Topics used: `farm` (cow, horse, chicken) + `sea` (dolphin, octopus).
-- `image_url` points at **Wikimedia Commons** photos (stable + fast). We first tried
-  Pollinations (too slow / failed) and loremflickr (flaky 500s) — Wikimedia won.
-- Because the shape matches the contract, when the game switches to
-  `questionService.getQuestions()` in **B3**, **no UI code changes**.
+- Exported as **`MOCK_QUESTIONS`** — the single source; both `gameStore` and C's
+  `questionService` import it.
+- Topics: `farm` (cow, horse, chicken) + `sea` (dolphin, octopus).
+- Images are **Wikimedia Commons** URLs (stable; Pollinations/loremflickr were rejected).
+- Same shape as the contract, so the B3 switch to `questionService.getQuestions()` changes no UI.
 
 ---
 
 ## `src/utils/shuffle.js`
 
-A pure helper (no React). Fisher–Yates shuffle; returns a **new** array, doesn't
-mutate the input.
+Pure Fisher–Yates shuffle; returns a new array. Exists so the correct answer (always first in
+`[correct_word, ...distractors]`) lands in a random position each question.
 
-- **Why it exists:** the answers are built as `[correct_word, ...distractors]`, so the
-  correct answer would always be first. Shuffling puts it in a random position each
-  question, so you can't win by always clicking the top button.
+---
+
+## `src/stores/gameStore.js`  ← the brain (B2)
+
+A MobX store: **all game state + the rules to change it**, separate from the UI. One shared
+instance (`export const gameStore = new GameStore()`), in-memory, resets on refresh.
+
+- **Observable state:** `questions`, `currentIndex`, `selected`, `score`, `streak`,
+  `bestStreak`, `status` (`'idle' | 'playing' | 'finished'`).
+- **`makeAutoObservable(this)`** in the constructor makes fields observable, getters computed,
+  methods actions.
+- **Computeds:** `currentQuestion`, `totalQuestions`, `isLast`, `answered`.
+- **Actions:** `startRound(questions = MOCK_QUESTIONS)` (reset + play), `selectAnswer(word)`
+  (records the pick, updates score/streak; wrong answer resets streak), `next()` (advance or
+  finish).
+- Per-user? No — it's one instance in the browser holding the *current session*. Persistent
+  per-account results are a separate concern (B4, `game_results`).
+
+---
+
+## `src/components/game/GamePage.jsx`  ← the screen (observer)
+
+Wrapped in **`observer(...)`** so it auto-re-renders when any store value it reads changes.
+Holds **no** game state of its own.
+
+- On mount: `useEffect(() => gameStore.startRound(), [])`.
+- Reads `gameStore.currentQuestion / currentIndex / totalQuestions / answered / selected /
+  status / isLast / score / streak / bestStreak`.
+- Click an answer → `gameStore.selectAnswer(word)`; Next → `gameStore.next()`.
+- **`useMemo`** still shuffles answers per question (random → must stay out of a MobX computed).
+- Guards: `if (!question) return null` for the first frame before `startRound` runs.
+- Renders `<ScoreBar/>`, `<QuestionCard/>`, the `<AnswerButton/>` list, feedback, and — when
+  `status === 'finished'` — `<ResultsCard/>`.
+- Has a top-of-file comment block summarizing current state for the team.
 
 ---
 
 ## `src/components/game/QuestionCard.jsx`
 
-Presentational. Shows the animal image + the prompt. Props: `question`.
-
-- **Mantine `Card`** — rounded, bordered container with a soft shadow.
-- **`Card.Section`** — makes the image span edge-to-edge (ignores card padding).
-- **`AspectRatio ratio={4/3}`** — locks the image box to a fixed shape so its height
-  tracks its width. This is why every question shows an **identically sized** image,
-  regardless of the source photo's dimensions. `Image fit="cover"` fills + crops it.
-- **`alt=""`** — the image is intentionally decorative; putting the animal name in `alt`
-  would leak the answer to screen readers.
-
----
+Presentational. `Card` + `Card.Section` + **`AspectRatio ratio={4/3}`** so every image box is
+the same size regardless of the source photo. `alt=""` (decorative — must not leak the answer).
 
 ## `src/components/game/AnswerButton.jsx`
 
-Presentational + reports clicks. Props: `word`, `onSelect`, `disabled`, `status`.
+One answer. `STATUS_PROPS` maps `idle/correct/wrong/muted` → Mantine `Button` props. **Lock
+gotcha:** doesn't use Mantine's `disabled` (which greys out and hides the color); locks with
+`style={{ pointerEvents: disabled ? 'none' : 'auto' }}`.
 
-- **`STATUS_PROPS`** maps each status to Mantine `Button` props:
-  `idle` → outline blue, `correct` → filled green, `wrong` → filled red,
-  `muted` → subtle grey.
-- **`onClick={() => onSelect(word)}`** — tells the page which word was picked
-  (the page passes its `setSelected` in as `onSelect`).
-- **The lock gotcha:** we do **not** use Mantine's `disabled` prop, because it greys the
-  button out and would hide the green/red feedback. Instead we lock with
-  `style={{ pointerEvents: disabled ? 'none' : 'auto' }}` — this stops any further
-  clicking (so you can't change your answer) while keeping the colors visible.
+## `src/components/game/ScoreBar.jsx`  (B2)
 
----
+Dumb, prop-driven (`score`, `streak`). Two Mantine `Badge`s in a `Group` — score (blue) and
+streak (orange when `streak > 1`, else grey). `GamePage` (observer) feeds fresh values, so it
+updates live.
 
-## `src/components/game/GamePage.jsx`
+## `src/components/game/ResultsCard.jsx`  (B2)
 
-The screen and the brain. Holds all state and logic; renders the components inside a
-Mantine layout.
-
-**State (the only things it "remembers"):**
-- `index` — which question (0-based). `question = MOCK_QUESTIONS[index]`.
-- `selected` — the word you clicked, or `null` if unanswered.
-- `finished` — `true` after the last question → swaps in the end screen.
-
-**Derived values (computed, not stored):**
-- `isLast` — are we on the last question? (controls "Next" vs "Finish")
-- `answered` — `selected !== null`? (locks buttons, shows feedback)
-- `answers` — `useMemo(shuffle([...]), [question])` — shuffled **once per question**,
-  not on every render, so the buttons don't reshuffle when you click.
-
-**Functions:**
-- `getStatus(word)` — returns `idle` / `correct` / `wrong` / `muted` for a button.
-  Before answering, everyone is `idle`. After, the correct word is always `correct`
-  (revealed), your pick (if wrong) is `wrong`, the rest are `muted`.
-- `handleNext()` — if last → `setFinished(true)`; else advance `index` and reset
-  `selected` to `null` (fresh question).
-
-**Layout (Mantine):**
-- `Container size="sm"` centers + caps width; `Stack` gives even vertical spacing.
-- Progress line is plain `Text` ("Question X of 5") — the real **progress bar** is B2.
-- End screen is a placeholder `Title` + `Text` — the real **score/results** screen is B2.
-
-> **Note for B2:** the plan is to move `index`/`selected`/`finished`/score/streak out of
-> this component and into a MobX store at `src/stores/gameStore.js` (next to C's
-> `authStore.js`), and make `GamePage` an `observer`.
+Dumb, prop-driven (`score`, `total`, `bestStreak`, `onPlayAgain`). Shows `score / total`, best
+streak, and a **Play again** button that calls `gameStore.startRound()`.
 
 ---
 
-## The core loop (one picture)
+## The core loop (B2)
 
 ```
 click "horse"
-  → AnswerButton runs onSelect('horse')
-  → = GamePage's setSelected('horse')
-  → GamePage re-renders: selected='horse', answered=true
-  → getStatus() recolors each button; feedback + Next appear
+  → AnswerButton → gameStore.selectAnswer('horse')   (an ACTION)
+  → store mutates selected/score/streak
+  → observer components (GamePage) auto re-render
+  → buttons recolor, ScoreBar updates, feedback + Next appear
 ```
 
-This "state lives up in the page, children get props down and send events up" is the
-central React pattern the whole feature is built on.
+Store = **what's true**; components = **how it looks**; MobX keeps them in sync.
 
 ---
 
-## Integration notes (done)
+## Integration notes
 
-- The temporary preview harness is **gone**. `main.jsx` renders `<App/>` (C's router),
-  `App.jsx` provides `<MantineProvider>`, and `index.css` was trimmed (with Ilan's OK)
-  to remove the Vite template `#root`/`h1`/`h2` rules that fought Mantine.
-- Game files were moved out of the old `src/features/game/` into C's flat structure.
-- C's `questionService` (async, with a simulated `wait()` delay) is available for **B3**.
+- **Ilan (C):** temporary harness gone; `main.jsx` renders `<App/>`, `App.jsx` provides
+  `<MantineProvider>`, `index.css` trimmed. Game files moved into the flat structure.
+- **arad (A) — merged:** `src/lib/supabase.js` (Supabase client, reads `VITE_SUPABASE_URL` +
+  `VITE_SUPABASE_PUBLISHABLE_KEY` from `.env`), `supabase/setup.sql` (profiles/questions/
+  game_results tables + RLS + the same 5 seeded questions), `.env.example`. `.env` is gitignored.
+  `supabase.js` isn't imported yet — it gets used in **B3**.
+- C's `questionService` (async, simulated `wait()` delay) is the B3 target for reading questions.
+- Schema note for B4: A's `game_results` uses `created_at` (+ a `topic` column) rather than the
+  doc's `played_at` — match A's real schema when saving.
