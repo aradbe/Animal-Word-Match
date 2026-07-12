@@ -1,50 +1,51 @@
-//ואז נמלא קודם אותו, כי questionService.js תלוי בו.
-
-
-/*מבנה 
-{
-  id,
-  image_url,
-  correct_word,
-  distractors,
-  level,
-  topic,
-  created_at
-}
- */
-
-
-
-
+// Single source of mock questions for the whole app.
+// Exported as MOCK_QUESTIONS because questionService imports this name.
+// Shape matches the agreed `question` contract, so swapping to real Supabase
+// data later changes no UI code.
 export const MOCK_QUESTIONS = [
   {
-    id: "mock-question-1",
-    image_url:
-      "https://images.unsplash.com/photo-1546182990-dffeafbe841d?auto=format&fit=crop&w=800&q=80",
-    correct_word: "Lion",
-    distractors: ["Tiger", "Bear", "Monkey"],
+    id: 'mock-1',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Cow_female_black_white.jpg?width=600',
+    correct_word: 'cow',
+    distractors: ['pig', 'horse', 'sheep'],
     level: 1,
-    topic: "wild animals",
-    created_at: "2026-07-11T09:00:00.000Z",
+    topic: 'farm',
+    created_at: '2026-07-09T09:00:00.000Z',
   },
   {
-    id: "mock-question-2",
-    image_url:
-      "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?auto=format&fit=crop&w=800&q=80",
-    correct_word: "Elephant",
-    distractors: ["Giraffe", "Horse", "Rhino"],
+    id: 'mock-2',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Nokota_Horses.jpg?width=600',
+    correct_word: 'horse',
+    distractors: ['cow', 'goat', 'sheep'],
     level: 1,
-    topic: "wild animals",
-    created_at: "2026-07-11T09:01:00.000Z",
+    topic: 'farm',
+    created_at: '2026-07-09T09:01:00.000Z',
   },
   {
-    id: "mock-question-3",
-    image_url:
-      "https://images.unsplash.com/photo-1456926631375-92c8ce872def?auto=format&fit=crop&w=800&q=80",
-    correct_word: "Tiger",
-    distractors: ["Lion", "Zebra", "Dog"],
+    id: 'mock-3',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Rooster_portrait2.jpg?width=600',
+    correct_word: 'chicken',
+    distractors: ['duck', 'goose', 'turkey'],
     level: 2,
-    topic: "wild animals",
-    created_at: "2026-07-11T09:02:00.000Z",
+    topic: 'farm',
+    created_at: '2026-07-09T09:02:00.000Z',
   },
-];
+  {
+    id: 'mock-4',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Tursiops_truncatus_01.jpg?width=600',
+    correct_word: 'dolphin',
+    distractors: ['shark', 'whale', 'seal'],
+    level: 2,
+    topic: 'sea',
+    created_at: '2026-07-09T09:03:00.000Z',
+  },
+  {
+    id: 'mock-5',
+    image_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Octopus_vulgaris_2.jpg?width=600',
+    correct_word: 'octopus',
+    distractors: ['squid', 'crab', 'jellyfish'],
+    level: 3,
+    topic: 'sea',
+    created_at: '2026-07-09T09:04:00.000Z',
+  },
+]
