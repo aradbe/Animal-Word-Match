@@ -1,18 +1,15 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import { Navigate } from "react-router-dom";
-
-
+import { observer } from "mobx-react-lite";
+import { authStore } from "../stores/authStore";
 
 //יגיעו מה-Auth MobX store.
 
 function AdminRoute({ children }) {
-  const isLoggedIn = true;  //  אם שניהם f 
-  const isAdmin = true;     //  יחסום את תנסה להיכנס לאדמין 
-
-  if (!isLoggedIn || !isAdmin) {
+  if (!authStore.isLoggedIn || !authStore.isAdmin) {
     return <Navigate to="/access-denied" replace />;
   }
-
   return children;
 }
-
-export default AdminRoute;
+export default observer(AdminRoute);

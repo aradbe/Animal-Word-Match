@@ -1,15 +1,15 @@
-import { Navigate } from "react-router-dom";
+/* eslint-disable react-refresh/only-export-components */
 
-//כרגע נעשה mock זמני. בהמשך זה יתחבר ל-authStore.
+import { Navigate } from "react-router-dom";
+import { observer } from "mobx-react-lite";
+import { authStore } from "../stores/authStore";
+
 function ProtectedRoute({ children }) {
 
-    const isLoggedIn = false;
-
-  if (!isLoggedIn) {
+ if (!authStore.isLoggedIn) {
     return <Navigate to="/access-denied" replace />;
   }
-
   return children;
 }
 
-export default ProtectedRoute;
+export default observer(ProtectedRoute);

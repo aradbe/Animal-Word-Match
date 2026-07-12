@@ -1,13 +1,16 @@
 //import { useState } from 'react'
 import { MantineProvider } from "@mantine/core";
 import AppRouter from "./router/AppRouter";
+import AppInitializer from "./components/AppInitializer";
 import "./App.css";
 
 
 function App() {
   return (
     <MantineProvider>
-      <AppRouter />
+      <AppInitializer>
+        <AppRouter />
+      </AppInitializer>
     </MantineProvider>
   );
 }
@@ -23,9 +26,9 @@ export default App;
 //  /#/game
 //  /#/game/play
 //  /#/results
-//  /#/progress
+//  /#/progress /// משהו השתבש איתו 
 
-//  /#/admin
+//  /#/admin  /// משהו השתבש איתו 
 //  /#/access-denied
 
 //  /#/sajdoiafjsodcvsd
