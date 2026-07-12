@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import { Navigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import { authStore } from "../stores/authStore";
@@ -10,5 +12,4 @@ function AdminRoute({ children }) {
   }
   return children;
 }
-
 export default observer(AdminRoute);
