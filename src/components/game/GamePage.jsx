@@ -6,8 +6,19 @@ import { shuffle } from '../../utils/shuffle'
 import QuestionCard from './QuestionCard'
 import AnswerButton from './AnswerButton'
 import ScoreBar from './ScoreBar'
+import ResultsCard from './ResultsCard'
 
 // An observer component that just displays the store and calls its actions
+
+/*
+  Current state (B2) — game screen, for the team before the merge:
+  - GamePage is a MobX observer and reads ALL game state from gameStore (src/stores/gameStore.js).
+    No more useState for game state — index, selection, score, streak, bestStreak and status live in the store.
+  - Data currently comes from mock (MOCK_QUESTIONS), NOT questionService. The switch to questionService is B3.
+  - ScoreBar shows live score/streak; ResultsCard shows the final result + a "Play again" button (calls startRound).
+  - Rendered via C's router: GameRoundPage at /game/play (inside MantineProvider).
+  Next: B3 = switch to questionService + loading/error states, B4 = save results (game_results), B5 = polish/mobile.
+*/
 
 const GamePage = observer(function GamePage() {
 
@@ -37,10 +48,12 @@ const GamePage = observer(function GamePage() {
     if (gameStore.status === 'finished') {
         return (
             <Container size="sm" py="xl">
-                <Stack align="center" gap="md">
-                    <Title order={2}>Round complete! 🎉</Title>
-                    <Text c="dimmed">(Results screen come later)</Text>
-                </Stack>
+                <ResultsCard
+                    score={gameStore.score}
+                    total={gameStore.totalQuestions}
+                    bestStreak={gameStore.bestStreak}
+                    onPlayAgain={() => gameStore.startRound()}
+                />
             </Container>
         )
     }
