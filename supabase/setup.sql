@@ -5,7 +5,7 @@
 -- Access rules:
 --   - Guests and logged-in users can read questions and play.
 --   - Only logged-in users can save and read their own results.
---   - Users can only read and update their own profile.
+--   - Users can only read their own profile.
 --
 -- Note:
 --   The "animal-images" Storage bucket was created manually
@@ -30,11 +30,18 @@ create table if not exists public.profiles (
     on delete cascade,
 
   display_name text,
+  
+  role text not null default 'kid'
+  check (role in ('kid', 'admin')),
 
   created_at timestamptz not null
     default now()
 );
 
+-- If the profiles table already exists, make sure the role column exists too.
+alter table public.profiles
+add column if not exists role text not null default 'kid'
+check (role in ('kid', 'admin'));
 
 -- ============================================================
 -- AUTOMATIC PROFILE CREATION
@@ -51,14 +58,19 @@ as $$
 begin
   insert into public.profiles (
     id,
-    display_name
+    display_name,
+    role
   )
   values (
     new.id,
     coalesce(
       new.raw_user_meta_data ->> 'display_name',
       split_part(new.email, '@', 1)
-    )
+    ),
+    case
+      when lower(new.email) = 'admin@admin.com' then 'admin'
+      else 'kid'
+    end
   )
   on conflict (id) do nothing;
 
@@ -202,11 +214,27 @@ enable row level security;
 -- TABLE PERMISSIONS
 -- ============================================================
 
--- Guests cannot access profiles.
+-- Guests cannot access profiles at all.
 
 revoke all
 on public.profiles
 from anon;
+
+
+-- Reset old permissions for logged-in users.
+-- This removes older grants like update if this script was run before.
+
+revoke all
+on public.profiles
+from authenticated;
+
+
+-- Logged-in users can only read profiles.
+-- RLS will ensure that they only access their own profile.
+
+grant select
+on public.profiles
+to authenticated;
 
 
 -- Guests cannot access saved game results.
@@ -214,14 +242,6 @@ from anon;
 revoke all
 on public.game_results
 from anon;
-
-
--- Logged-in users can read and update profiles.
--- RLS will ensure that they only access their own profile.
-
-grant select, update
-on public.profiles
-to authenticated;
 
 
 -- Guests and logged-in users can read questions.
@@ -245,15 +265,12 @@ grant select, insert
 on public.game_results
 to authenticated;
 
-
 -- ============================================================
 -- PROFILES RLS POLICIES
 -- ============================================================
-
 drop policy if exists
   "Users can read their own profile"
 on public.profiles;
-
 
 create policy "Users can read their own profile"
 on public.profiles
@@ -267,19 +284,6 @@ using (
 drop policy if exists
   "Users can update their own profile"
 on public.profiles;
-
-
-create policy "Users can update their own profile"
-on public.profiles
-for update
-to authenticated
-using (
-  (select auth.uid()) = id
-)
-with check (
-  (select auth.uid()) = id
-);
-
 
 -- ============================================================
 -- QUESTIONS RLS POLICIES
