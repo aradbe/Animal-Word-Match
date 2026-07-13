@@ -67,6 +67,26 @@ export async function generateQuestion(topic, level) {
   return cloneData(newQuestion);
 }
 
+export async function createQuestion(questionData) {
+  await wait(500);
+
+  // Keep manual admin creation behind the service. Later, only this function
+  // needs to change when the real Supabase Edge Function is ready.
+  const newQuestion = {
+    id: crypto.randomUUID(),
+    image_url: questionData.image_url,
+    correct_word: questionData.correct_word,
+    distractors: questionData.distractors,
+    level: Number(questionData.level),
+    topic: questionData.topic,
+    created_at: new Date().toISOString(),
+  };
+
+  questions = [newQuestion, ...questions];
+
+  return cloneData(newQuestion);
+}
+
 export async function deleteQuestion(questionId) {
   await wait();
 

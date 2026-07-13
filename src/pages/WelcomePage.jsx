@@ -10,6 +10,7 @@ import { authStore } from "../stores/authStore";
 function WelcomePage() {
   const navigate = useNavigate();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalKey, setAuthModalKey] = useState(0);
 
   function handleStartGame() {
     navigate(authStore.isLoggedIn ? "/game/play" : "/game");
@@ -17,6 +18,8 @@ function WelcomePage() {
 
   function handleLoginClick() {
     // Login and signup stay in a modal, so there is no separate /login route.
+    authStore.clearError();
+    setAuthModalKey((currentKey) => currentKey + 1);
     setIsAuthModalOpen(true);
   }
 
@@ -93,6 +96,7 @@ function WelcomePage() {
       </Stack>
 
       <AuthModal
+        key={authModalKey}
         opened={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
