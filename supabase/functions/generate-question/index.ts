@@ -1,5 +1,5 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { withSupabase } from "jsr:@supabase/server@1";
 import { GoogleGenAI } from "npm:@google/genai";
 
 const STORAGE_BUCKET = "animal-images";
@@ -7,43 +7,142 @@ const STORAGE_BUCKET = "animal-images";
 const CLOUDFLARE_IMAGE_MODEL =
   "@cf/bytedance/stable-diffusion-xl-lightning";
 
+const ALLOWED_TOPICS = [
+  "farm",
+  "sea",
+  "jungle",
+  "forest",
+  "arctic",
+] as const;
+
+type Topic = (typeof ALLOWED_TOPICS)[number];
+type Level = 1 | 2 | 3;
+
 type GeneratedQuestion = {
   correct_word: string;
   distractors: string[];
-  image_prompt: string;
+};
+
+type RequestPayload = {
+  topic?: string;
+  level?: number;
+  force_fallback?: boolean;
+};
+
+const TOPIC_BACKGROUNDS: Record<Topic, string> = {
+  farm: "an empty grassy farm field under a clear sky",
+  sea: "a simple blue underwater environment",
+  jungle: "a natural tropical jungle with green leaves",
+  forest: "a quiet woodland environment with trees",
+  arctic: "an empty snowy Arctic landscape with ice",
+};
+
+/*
+These are the 35 animals already used in the main game.
+
+They are also used to create suitable distractors for fallback questions.
+*/
+const CURRENT_ANIMALS: Record<
+  Topic,
+  Record<Level, string[]>
+> = {
+  farm: {
+    1: ["cow", "pig", "horse"],
+    2: ["sheep", "goat"],
+    3: ["donkey", "turkey"],
+  },
+
+  sea: {
+    1: ["fish", "shark", "dolphin"],
+    2: ["whale", "turtle"],
+    3: ["octopus", "seahorse"],
+  },
+
+  jungle: {
+    1: ["monkey", "tiger", "parrot"],
+    2: ["gorilla", "snake"],
+    3: ["jaguar", "toucan"],
+  },
+
+  forest: {
+    1: ["bear", "deer", "rabbit"],
+    2: ["fox", "owl"],
+    3: ["raccoon", "woodpecker"],
+  },
+
+  arctic: {
+    1: ["polar bear", "seal", "reindeer"],
+    2: ["walrus", "arctic fox"],
+    3: ["arctic hare", "snowy owl"],
+  },
+};
+
+/*
+If Gemini fails, the function chooses an unused animal
+from this list for the requested topic and level.
+*/
+const FALLBACK_ANIMALS: Record<
+  Topic,
+  Record<Level, string[]>
+> = {
+  farm: {
+    1: ["chicken", "duck"],
+    2: ["goose", "rooster"],
+    3: ["llama", "alpaca"],
+  },
+
+  sea: {
+    1: ["crab", "starfish"],
+    2: ["seal", "lobster"],
+    3: ["jellyfish", "squid"],
+  },
+
+  jungle: {
+    1: ["elephant", "crocodile"],
+    2: ["leopard", "sloth"],
+    3: ["tapir", "okapi"],
+  },
+
+  forest: {
+    1: ["squirrel", "wolf"],
+    2: ["hedgehog", "badger"],
+    3: ["moose", "lynx"],
+  },
+
+  arctic: {
+    1: ["orca", "beluga"],
+    2: ["puffin", "musk ox"],
+    3: ["narwhal", "lemming"],
+  },
 };
 
 const questionSchema = {
   type: "object",
+
   properties: {
     correct_word: {
       type: "string",
       description:
-        "The common English name of exactly one animal represented by the image.",
+        "The common lowercase English name of one animal.",
     },
 
     distractors: {
       type: "array",
       description:
-        "Exactly three believable but incorrect animal names.",
+        "Exactly three different incorrect animal names from the same habitat.",
+
       items: {
         type: "string",
       },
+
       minItems: 3,
       maxItems: 3,
-    },
-
-    image_prompt: {
-      type: "string",
-      description:
-        "A clear image prompt showing exactly one animal, with no people, buildings, objects, text, or other animals.",
     },
   },
 
   required: [
     "correct_word",
     "distractors",
-    "image_prompt",
   ],
 };
 
@@ -51,75 +150,22 @@ function cleanWord(word: string): string {
   return word.trim().toLowerCase();
 }
 
-function validateGeneratedQuestion(
-  generated: GeneratedQuestion,
-): GeneratedQuestion {
-  if (
-    typeof generated.correct_word !== "string" ||
-    !Array.isArray(generated.distractors) ||
-    typeof generated.image_prompt !== "string"
-  ) {
-    throw new Error(
-      "Gemini returned an invalid question structure.",
-    );
-  }
-
-  const correctWord = cleanWord(
-    generated.correct_word,
+function isAllowedTopic(
+  topic: string,
+): topic is Topic {
+  return ALLOWED_TOPICS.includes(
+    topic as Topic,
   );
+}
 
-  const distractors = generated.distractors.map(
-    cleanWord,
+function isAllowedLevel(
+  level: number,
+): level is Level {
+  return (
+    level === 1 ||
+    level === 2 ||
+    level === 3
   );
-
-  const imagePrompt =
-    generated.image_prompt.trim();
-
-  if (!correctWord) {
-    throw new Error(
-      "Gemini returned an empty correct word.",
-    );
-  }
-
-  if (distractors.length !== 3) {
-    throw new Error(
-      "Gemini must return exactly three distractors.",
-    );
-  }
-
-  if (distractors.some((word) => !word)) {
-    throw new Error(
-      "Gemini returned an empty distractor.",
-    );
-  }
-
-  const uniqueDistractors = new Set(
-    distractors,
-  );
-
-  if (uniqueDistractors.size !== 3) {
-    throw new Error(
-      "Gemini returned duplicate distractors.",
-    );
-  }
-
-  if (uniqueDistractors.has(correctWord)) {
-    throw new Error(
-      "The correct word also appears in the distractors.",
-    );
-  }
-
-  if (!imagePrompt) {
-    throw new Error(
-      "Gemini returned an empty image prompt.",
-    );
-  }
-
-  return {
-    correct_word: correctWord,
-    distractors,
-    image_prompt: imagePrompt,
-  };
 }
 
 function getImageExtension(
@@ -139,13 +185,198 @@ function getImageExtension(
   return "png";
 }
 
+function createRandomSeed(): number {
+  return Math.floor(
+    Math.random() * 2147483647,
+  );
+}
+
+function validateGeneratedQuestion(
+  generated: GeneratedQuestion,
+): GeneratedQuestion {
+  if (
+    typeof generated.correct_word !==
+      "string" ||
+    !Array.isArray(generated.distractors)
+  ) {
+    throw new Error(
+      "Gemini returned an invalid question structure.",
+    );
+  }
+
+  if (
+    generated.distractors.some(
+      (word) => typeof word !== "string",
+    )
+  ) {
+    throw new Error(
+      "Gemini returned an invalid distractor.",
+    );
+  }
+
+  const correctWord = cleanWord(
+    generated.correct_word,
+  );
+
+  const distractors =
+    generated.distractors.map(cleanWord);
+
+  if (!correctWord) {
+    throw new Error(
+      "Gemini returned an empty correct word.",
+    );
+  }
+
+  if (distractors.length !== 3) {
+    throw new Error(
+      "Gemini must return exactly three distractors.",
+    );
+  }
+
+  if (
+    distractors.some(
+      (word) => !word,
+    )
+  ) {
+    throw new Error(
+      "Gemini returned an empty distractor.",
+    );
+  }
+
+  const uniqueDistractors =
+    new Set(distractors);
+
+  if (uniqueDistractors.size !== 3) {
+    throw new Error(
+      "Gemini returned duplicate distractors.",
+    );
+  }
+
+  if (
+    uniqueDistractors.has(correctWord)
+  ) {
+    throw new Error(
+      "The correct word also appears in the distractors.",
+    );
+  }
+
+  return {
+    correct_word: correctWord,
+    distractors,
+  };
+}
+
+function buildFallbackDistractors(
+  topic: Topic,
+  level: Level,
+  correctWord: string,
+): string[] {
+  const levels: Level[] = [1, 2, 3];
+
+  /*
+  Animals from the requested level are placed first,
+  so distractors are usually close in difficulty.
+  */
+  const candidates = [
+    ...FALLBACK_ANIMALS[topic][level],
+    ...CURRENT_ANIMALS[topic][level],
+
+    ...levels
+      .filter(
+        (currentLevel) =>
+          currentLevel !== level,
+      )
+      .flatMap(
+        (currentLevel) =>
+          CURRENT_ANIMALS[topic][
+            currentLevel
+          ],
+      ),
+
+    ...levels
+      .filter(
+        (currentLevel) =>
+          currentLevel !== level,
+      )
+      .flatMap(
+        (currentLevel) =>
+          FALLBACK_ANIMALS[topic][
+            currentLevel
+          ],
+      ),
+  ];
+
+  const uniqueCandidates = [
+    ...new Set(
+      candidates
+        .map(cleanWord)
+        .filter(
+          (animal) =>
+            animal !== correctWord,
+        ),
+    ),
+  ];
+
+  const distractors =
+    uniqueCandidates.slice(0, 3);
+
+  if (distractors.length !== 3) {
+    throw new Error(
+      "Could not create three fallback distractors.",
+    );
+  }
+
+  return distractors;
+}
+
+function createFallbackQuestion(
+  topic: Topic,
+  level: Level,
+  existingWords: Set<string>,
+): GeneratedQuestion {
+  const availableAnimals =
+    FALLBACK_ANIMALS[topic][level].filter(
+      (animal) =>
+        !existingWords.has(
+          cleanWord(animal),
+        ),
+    );
+
+  if (availableAnimals.length === 0) {
+    throw new Error(
+      `Gemini failed and no unused fallback animal remains for ${topic} level ${level}.`,
+    );
+  }
+
+  const randomIndex = Math.floor(
+    Math.random() *
+      availableAnimals.length,
+  );
+
+  const correctWord = cleanWord(
+    availableAnimals[randomIndex],
+  );
+
+  return {
+    correct_word: correctWord,
+
+    distractors:
+      buildFallbackDistractors(
+        topic,
+        level,
+        correctWord,
+      ),
+  };
+}
+
 export default {
   fetch: withSupabase(
     { auth: "user" },
 
     async (req, ctx) => {
-      let uploadedFilePath: string | null =
-        null;
+      let uploadedFilePath:
+        | string
+        | null = null;
 
       try {
         if (req.method !== "POST") {
@@ -161,10 +392,6 @@ export default {
           );
         }
 
-        const geminiApiKey = Deno.env.get(
-          "GEMINI_API_KEY",
-        );
-
         const cloudflareAccountId =
           Deno.env.get(
             "CLOUDFLARE_ACCOUNT_ID",
@@ -175,11 +402,15 @@ export default {
             "CLOUDFLARE_API_TOKEN",
           );
 
-        if (!geminiApiKey) {
-          throw new Error(
-            "GEMINI_API_KEY secret is missing.",
+        const geminiApiKey =
+          Deno.env.get(
+            "GEMINI_API_KEY",
           );
-        }
+
+        const geminiModel =
+          Deno.env.get(
+            "GEMINI_MODEL",
+          ) ?? "gemini-3.5-flash";
 
         if (!cloudflareAccountId) {
           throw new Error(
@@ -193,14 +424,35 @@ export default {
           );
         }
 
-        const body = await req.json();
+        let body: RequestPayload;
+
+        try {
+          body =
+            (await req.json()) as RequestPayload;
+        } catch {
+          return Response.json(
+            {
+              success: false,
+              error:
+                "The request body must be valid JSON.",
+            },
+            {
+              status: 400,
+            },
+          );
+        }
 
         const topic =
           typeof body.topic === "string"
-            ? body.topic.trim().toLowerCase()
+            ? cleanWord(body.topic)
             : "";
 
-        const level = Number(body.level);
+        const level = Number(
+          body.level,
+        );
+
+        const forceFallback =
+          body.force_fallback === true;
 
         if (!topic) {
           return Response.json(
@@ -215,14 +467,13 @@ export default {
         }
 
         if (
-          !Number.isInteger(level) ||
-          level <= 0
+          !isAllowedTopic(topic)
         ) {
           return Response.json(
             {
               success: false,
               error:
-                "Level must be a positive whole number.",
+                "Topic must be farm, sea, jungle, forest, or arctic.",
             },
             {
               status: 400,
@@ -230,123 +481,342 @@ export default {
           );
         }
 
-        const ai = new GoogleGenAI({
-          apiKey: geminiApiKey,
-        });
-
-        // 1. Generate animal-only question data with Gemini.
-        const questionInteraction =
-          await ai.interactions.create({
-            model: "gemini-3.5-flash",
-
-            input: `
-Create one educational animal word-to-image matching question.
-
-Animal category, habitat, or environment:
-${topic}
-
-Difficulty level:
-${level}
-
-Important rules:
-- The correct answer MUST be the common English name of an animal.
-- The correct answer must never be a building, place, object, plant, food, vehicle, person, job, or activity.
-- The topic only describes the animal's category, habitat, or environment.
-- For the topic "farm", valid answers include cow, pig, horse, sheep, goat, duck, or chicken.
-- "Barn", "tractor", "fence", "hay", and "farmer" are invalid because they are not animals.
-- For the topic "ocean", valid answers include shark, dolphin, whale, octopus, seal, or turtle.
-- Return exactly three incorrect distractors.
-- Every distractor MUST also be the common English name of an animal.
-- Distractors should be believable for the requested topic and difficulty.
-- Do not repeat the correct answer.
-- Do not repeat any distractor.
-- Use lowercase English animal names.
-- Prefer one short word when possible.
-- The image prompt must describe exactly one animal.
-- The image prompt must not request buildings, people, tools, vehicles, text, labels, or additional animals.
-            `,
-
-            response_format: {
-              type: "text",
-              mime_type: "application/json",
-              schema: questionSchema,
-            },
-          });
-
         if (
-          !questionInteraction.output_text
+          !Number.isInteger(level) ||
+          !isAllowedLevel(level)
         ) {
-          throw new Error(
-            "Gemini did not return question data.",
+          return Response.json(
+            {
+              success: false,
+              error:
+                "Level must be 1, 2, or 3.",
+            },
+            {
+              status: 400,
+            },
           );
         }
 
-        const parsedQuestion = JSON.parse(
-          questionInteraction.output_text,
-        ) as GeneratedQuestion;
+        /*
+        Read existing questions so that Gemini and the
+        fallback do not deliberately create an existing animal.
+        */
+        const {
+          data: existingQuestions,
+          error: existingQuestionsError,
+        } = await ctx.supabaseAdmin
+          .from("questions")
+          .select("correct_word")
+          .eq("topic", topic)
+          .eq("level", level);
 
-        const generatedQuestion =
-          validateGeneratedQuestion(
-            parsedQuestion,
+        if (existingQuestionsError) {
+          throw new Error(
+            `Could not check existing questions: ${existingQuestionsError.message}`,
+          );
+        }
+
+        const existingWords =
+          new Set(
+            (
+              existingQuestions ?? []
+            ).map((question) =>
+              cleanWord(
+                question.correct_word,
+              ),
+            ),
           );
 
-        // 2. Generate the animal image with Cloudflare Workers AI.
+        let generatedQuestion:
+          | GeneratedQuestion
+          | null = null;
+
+        let generationSource:
+          | "gemini"
+          | "fallback" =
+          "gemini";
+
+        let fallbackReason:
+          | string
+          | null = null;
+
+        /*
+        Try Gemini first.
+
+        Any Gemini error, quota problem, invalid JSON,
+        invalid answer or duplicate answer activates fallback.
+        */
+        if (
+          !forceFallback &&
+          geminiApiKey
+        ) {
+          try {
+            const ai =
+              new GoogleGenAI({
+                apiKey:
+                  geminiApiKey,
+              });
+
+            const questionInteraction =
+              await ai.interactions.create({
+                model: geminiModel,
+
+                input: `
+Create one animal word-to-image matching question.
+
+Requested habitat:
+${topic}
+
+Requested difficulty level:
+${level}
+
+Difficulty:
+- Level 1: very common animals young children easily recognize.
+- Level 2: moderately common animals.
+- Level 3: less common but still recognizable animals.
+
+Allowed habitats:
+- farm
+- sea
+- jungle
+- forest
+- arctic
+
+Rules:
+- Return one animal as the correct answer.
+- The animal must naturally belong to ${topic}.
+- Use the common lowercase English animal name.
+- Return exactly three distractors.
+- Every distractor must also be an animal.
+- Every distractor must belong to the same habitat.
+- The distractors should have similar difficulty.
+- Do not repeat the correct answer.
+- Do not repeat a distractor.
+- Do not return people, buildings, objects, food, jobs, plants or vehicles.
+- Do not use penguin for the Arctic habitat.
+                `,
+
+                response_format: {
+                  type: "text",
+                  mime_type:
+                    "application/json",
+                  schema:
+                    questionSchema,
+                },
+              });
+
+            if (
+              !questionInteraction.output_text
+            ) {
+              throw new Error(
+                "Gemini returned no question data.",
+              );
+            }
+
+            const parsedQuestion =
+              JSON.parse(
+                questionInteraction.output_text,
+              ) as GeneratedQuestion;
+
+            const validatedQuestion =
+              validateGeneratedQuestion(
+                parsedQuestion,
+              );
+
+            if (
+              existingWords.has(
+                validatedQuestion.correct_word,
+              )
+            ) {
+              throw new Error(
+                `Gemini generated the existing question "${validatedQuestion.correct_word}".`,
+              );
+            }
+
+            generatedQuestion =
+              validatedQuestion;
+          } catch (error) {
+            fallbackReason =
+              error instanceof Error
+                ? error.message
+                : "Gemini generation failed.";
+
+            console.warn(
+              "Gemini failed. Using fallback:",
+              fallbackReason,
+            );
+          }
+        } else if (
+          forceFallback
+        ) {
+          fallbackReason =
+            "Fallback was forced for testing.";
+        } else {
+          fallbackReason =
+            "GEMINI_API_KEY is missing.";
+        }
+
+        /*
+        Gemini did not produce a usable question,
+        so use a curated unused fallback.
+        */
+        if (!generatedQuestion) {
+          generationSource =
+            "fallback";
+
+          generatedQuestion =
+            createFallbackQuestion(
+              topic,
+              level,
+              existingWords,
+            );
+        }
+
+        const topicBackground =
+          TOPIC_BACKGROUNDS[topic];
+
+        /*
+        Generate a realistic image.
+
+        The prompt is created by our code instead of Gemini,
+        preventing Gemini from introducing text or poster layouts.
+        */
         const cloudflareUrl =
           `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/${CLOUDFLARE_IMAGE_MODEL}`;
 
-        const imageResponse = await fetch(
-          cloudflareUrl,
-          {
-            method: "POST",
+        const imageResponse =
+          await fetch(
+            cloudflareUrl,
+            {
+              method: "POST",
 
-            headers: {
-              Authorization:
-                `Bearer ${cloudflareApiToken}`,
-              "Content-Type":
-                "application/json",
+              headers: {
+                Authorization:
+                  `Bearer ${cloudflareApiToken}`,
+
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                prompt: `
+Create a photorealistic natural image of exactly one animal.
+
+Subject:
+One single ${generatedQuestion.correct_word}
+
+Rules:
+- Show exactly one ${generatedQuestion.correct_word}.
+- The image must contain only one animal total.
+- No other animals may appear in the background or distance.
+- Show one head and one body only.
+- Center the animal.
+- Show the full body when possible.
+- Make the animal large, clear and easy to recognize.
+- The animal must look realistic, natural and lifelike.
+- Make the result look like a real nature photograph.
+- Use natural lighting.
+- Use realistic fur, feathers, skin and body proportions.
+- Leave empty space around the animal.
+
+Background:
+${topicBackground}
+
+Important:
+- Output only the natural image.
+- No flashcard layout.
+- No poster layout.
+- No headline.
+- No title.
+- No banner.
+- No caption.
+- No label.
+- No text.
+- No letters.
+- No words.
+- No logo.
+- No watermark.
+- No people.
+- No buildings.
+- No vehicles.
+- No tools.
+                `,
+
+                negative_prompt: `
+text,
+words,
+letters,
+headline,
+title,
+caption,
+subtitle,
+banner,
+label,
+poster,
+flashcard,
+sign,
+logo,
+watermark,
+typography,
+graphic design,
+UI,
+border,
+frame,
+template,
+multiple animals,
+more than one animal,
+two animals,
+three animals,
+several animals,
+animal group,
+animal family,
+animal pair,
+herd,
+flock,
+pack,
+school of fish,
+duplicate animal,
+repeated animal,
+second animal,
+extra animal,
+background animal,
+distant animal,
+hidden animal,
+partial animal,
+reflection,
+mirror image,
+multiple ${generatedQuestion.correct_word},
+second ${generatedQuestion.correct_word},
+extra ${generatedQuestion.correct_word},
+${generatedQuestion.distractors.join(", ")},
+people,
+person,
+farmer,
+barn,
+building,
+house,
+tractor,
+vehicle,
+tools,
+blurry,
+collage,
+split screen,
+illustration,
+cartoon,
+drawing,
+painting,
+3d render
+                `,
+
+                width: 1024,
+                height: 1024,
+                num_steps: 20,
+                guidance: 10,
+                seed:
+                  createRandomSeed(),
+              }),
             },
-
-            body: JSON.stringify({
-              prompt: `
-Create a clear educational image for a children's animal word-matching game.
-
-Show exactly one animal:
-${generatedQuestion.correct_word}
-
-Image description:
-${generatedQuestion.image_prompt}
-
-Requirements:
-- The main subject must clearly be one ${generatedQuestion.correct_word}.
-- Show exactly one animal.
-- Center the animal in the image.
-- Show the animal's full body when possible.
-- Use a simple and uncluttered natural background.
-- Use bright, realistic colors.
-- Do not show people.
-- Do not show barns, buildings, tools, tractors, vehicles, signs, or unrelated objects.
-- Do not include words, letters, captions, labels, logos, or watermarks.
-- Do not show any of these other animals:
-${generatedQuestion.distractors.join(", ")}
-              `,
-
-              negative_prompt: `
-words, letters, text, captions, labels,
-logos, watermarks, borders, UI elements,
-people, farmer, barn, building, house,
-tractor, vehicle, tools, signs,
-multiple animals, extra animals,
-blurry image, cropped subject,
-${generatedQuestion.distractors.join(", ")}
-              `,
-
-              width: 1024,
-              height: 1024,
-              num_steps: 4,
-              guidance: 7.5,
-            }),
-          },
-        );
+          );
 
         if (!imageResponse.ok) {
           const cloudflareError =
@@ -360,7 +830,10 @@ ${generatedQuestion.distractors.join(", ")}
         const imageArrayBuffer =
           await imageResponse.arrayBuffer();
 
-        if (imageArrayBuffer.byteLength === 0) {
+        if (
+          imageArrayBuffer.byteLength ===
+          0
+        ) {
           throw new Error(
             "Cloudflare returned an empty image.",
           );
@@ -380,28 +853,39 @@ ${generatedQuestion.distractors.join(", ")}
             : "image/png";
 
         const imageExtension =
-          getImageExtension(imageMimeType);
+          getImageExtension(
+            imageMimeType,
+          );
 
-        const imageBlob = new Blob(
-          [imageArrayBuffer],
-          {
-            type: imageMimeType,
-          },
-        );
+        const imageBlob =
+          new Blob(
+            [imageArrayBuffer],
+            {
+              type: imageMimeType,
+            },
+          );
 
-        // 3. Upload the image to Supabase Storage.
+        /*
+        Upload the image to Storage.
+        */
         uploadedFilePath =
           `generated/${crypto.randomUUID()}.${imageExtension}`;
 
-        const { error: uploadError } =
+        const {
+          error: uploadError,
+        } =
           await ctx.supabaseAdmin.storage
             .from(STORAGE_BUCKET)
             .upload(
               uploadedFilePath,
               imageBlob,
               {
-                contentType: imageMimeType,
-                cacheControl: "31536000",
+                contentType:
+                  imageMimeType,
+
+                cacheControl:
+                  "31536000",
+
                 upsert: false,
               },
             );
@@ -412,7 +896,9 @@ ${generatedQuestion.distractors.join(", ")}
           );
         }
 
-        const { data: publicUrlData } =
+        const {
+          data: publicUrlData,
+        } =
           ctx.supabaseAdmin.storage
             .from(STORAGE_BUCKET)
             .getPublicUrl(
@@ -422,23 +908,29 @@ ${generatedQuestion.distractors.join(", ")}
         const imageUrl =
           publicUrlData.publicUrl;
 
-        // 4. Insert the completed question into the database.
+        /*
+        Insert the completed question.
+        */
         const {
           data: insertedQuestion,
           error: insertError,
-        } = await ctx.supabaseAdmin
-          .from("questions")
-          .insert({
-            image_url: imageUrl,
-            correct_word:
-              generatedQuestion.correct_word,
-            distractors:
-              generatedQuestion.distractors,
-            level,
-            topic,
-          })
-          .select()
-          .single();
+        } =
+          await ctx.supabaseAdmin
+            .from("questions")
+            .insert({
+              image_url: imageUrl,
+
+              correct_word:
+                generatedQuestion.correct_word,
+
+              distractors:
+                generatedQuestion.distractors,
+
+              level,
+              topic,
+            })
+            .select()
+            .single();
 
         if (insertError) {
           throw new Error(
@@ -450,7 +942,18 @@ ${generatedQuestion.distractors.join(", ")}
 
         return Response.json({
           success: true,
-          question: insertedQuestion,
+
+          generation_source:
+            generationSource,
+
+          fallback_reason:
+            generationSource ===
+            "fallback"
+              ? fallbackReason
+              : null,
+
+          question:
+            insertedQuestion,
         });
       } catch (error) {
         console.error(
@@ -458,11 +961,19 @@ ${generatedQuestion.distractors.join(", ")}
           error,
         );
 
+        /*
+        If the image uploaded but database insertion failed,
+        remove the unused image.
+        */
         if (uploadedFilePath) {
-          const { error: cleanupError } =
+          const {
+            error: cleanupError,
+          } =
             await ctx.supabaseAdmin.storage
               .from(STORAGE_BUCKET)
-              .remove([uploadedFilePath]);
+              .remove([
+                uploadedFilePath,
+              ]);
 
           if (cleanupError) {
             console.error(
@@ -475,6 +986,7 @@ ${generatedQuestion.distractors.join(", ")}
         return Response.json(
           {
             success: false,
+
             error:
               error instanceof Error
                 ? error.message
