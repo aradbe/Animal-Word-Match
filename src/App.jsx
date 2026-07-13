@@ -2,12 +2,13 @@
 import { MantineProvider } from "@mantine/core";
 import AppRouter from "./router/AppRouter";
 import AppInitializer from "./components/app/AppInitializer";
+import { theme } from "./theme";
 import "./App.css";
 
 
 function App() {
   return (
-    <MantineProvider>
+    <MantineProvider theme={theme}>
       <AppInitializer>
         <AppRouter />
       </AppInitializer>

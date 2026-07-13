@@ -1,4 +1,4 @@
-import { AspectRatio, Card, Image, Text } from '@mantine/core'
+import { AspectRatio, Image, Text } from '@mantine/core'
 // Shown if a question's image_url fails to load.
 const IMAGE_FALLBACK =
     'data:image/svg+xml;charset=utf-8,' +
@@ -12,22 +12,21 @@ const IMAGE_FALLBACK =
 
 function QuestionCard({ question }) {
     return (
-        <Card shadow="sm" padding="lg" radius="md" withBorder>
-            <Card.Section>
-                <AspectRatio ratio={4 / 3}>
-                    <Image
-                        src={question.image_url}
-                        alt=""
-                        fit="cover"
-                        fallbackSrc={IMAGE_FALLBACK}
-                    />
-                </AspectRatio>
-            </Card.Section>
+        <div>
+            <AspectRatio ratio={4 / 3}>
+                <Image
+                    src={question.image_url}
+                    alt=""
+                    fit="cover"
+                    radius="lg"
+                    fallbackSrc={IMAGE_FALLBACK}
+                />
+            </AspectRatio>
 
-            <Text size="xl" fw={700} ta="center" mt="md">
+            <Text size="xl" fw={800} ta="center" mt="md">
                 Which animal is this?
             </Text>
-        </Card>
+        </div>
     )
 }
 
