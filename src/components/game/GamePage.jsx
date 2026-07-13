@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Container, Stack, Text, Title, Button } from '@mantine/core'
+import { Container, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
 import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
 import QuestionCard from './QuestionCard'
@@ -33,15 +33,35 @@ const GamePage = observer(function GamePage() {
         [question]
     )
 
-    if (!question) {
-        return null
-    }
+
 
     function getStatus(word) {
         if (!gameStore.answered) return 'idle'
         if (word === question.correct_word) return 'correct'
         if (word === gameStore.selected) return 'wrong'
         return 'muted'
+    }
+
+    // Loading - questions being fetched
+    if (gameStore.status === 'loading') {
+        return (
+            <Center h="60vh">
+                <Loader size="lg"/>
+            </Center>
+        )
+    }
+
+    // Error - fetch failed
+    if (gameStore.status === 'error') {
+        return (
+            <Container size="sm" py="xl">
+                <Stack align="center" gap="md">
+                    <Title order={3}>Something went wrong</Title>
+                    <Text c="dimmed">{gameStore.error}</Text>
+                    <Button onClick={() => gameStore.startRound()}>Try again</Button>
+                </Stack>
+            </Container>
+        )
     }
 
     // End of round — placeholder only. Real score/results screen is B2.
@@ -56,6 +76,10 @@ const GamePage = observer(function GamePage() {
                 />
             </Container>
         )
+    }
+
+    if (!question) {
+        return null
     }
 
     return (

@@ -1,13 +1,14 @@
-# Game feature — code guide (B1 + B2)
+# Game feature — code guide (B1 + B2 + B3)
 
-A file-by-file explanation of Person B's game feature after **B1** (game UI on 5 mock
-questions) and **B2** (MobX store: score, streak, round, results), integrated into Ilan's
-(Person C) scaffold and merged with arad's (Person A) Supabase setup.
-Update this doc at the end of each future stage (B3–B5).
+A file-by-file explanation of Person B's game feature after **B1** (game UI), **B2** (MobX
+store: score/streak/round/results), and **B3** (real questions from Supabase + loading/error/
+broken-image states). Integrated into Ilan's (Person C) scaffold and arad's (Person A) Supabase.
+Update this doc at the end of each future stage (B4–B5).
 
-> **Status:** B1 + B2 complete. Game renders through C's router at `/#/game/play`, powered
-> by a MobX store, with live score/streak and a results screen. Still reads mock data
-> directly — the switch to `questionService` → Supabase is **B3**.
+> **Status:** B1 + B2 + B3 complete. Game renders through C's router at `/#/game/play`, powered
+> by a MobX store, fetching **real questions from Supabase** (via `questionService`, with a mock
+> fallback), with loading spinner, error+retry, and a broken-image placeholder. Verified live in
+> the Network tab. Next: **B4** (save results to `game_results`, My Progress page).
 
 ---
 
@@ -125,6 +126,29 @@ click "horse"
 ```
 
 Store = **what's true**; components = **how it looks**; MobX keeps them in sync.
+
+---
+
+## B3 — real data & async states
+
+The game now loads **real questions from Supabase**, with proper async handling.
+
+- **`questionService.getAllQuestions()`** (`src/services/questionService.js`) now queries
+  `supabase.from("questions").select("*")`. On any error (network/RLS/bad key) or an empty table
+  it returns `MOCK_QUESTIONS` — it **never throws**, so the game never blocks (team rule).
+- **`gameStore.startRound()` is now `async`:** sets `status = 'loading'`, `await`s
+  `questionService.getAllQuestions()`, then `shuffle(pool).slice(0, ROUND_SIZE)` builds the round
+  and sets `status = 'playing'`. On failure → `status = 'error'` + `error` message. Store now has
+  a `status` of `'idle' | 'loading' | 'playing' | 'finished' | 'error'` and an `error` field.
+  State changed **after an `await` is wrapped in `runInAction`** (MobX requirement).
+- **`GamePage`** renders per status: `loading` → centered `<Loader/>`; `error` → message +
+  **Try again** (`startRound()`); then the `finished` / `!question` / playing screens. Order of the
+  early returns matters (loading → error → finished → `!question` → playing).
+- **`QuestionCard`** has `fallbackSrc={IMAGE_FALLBACK}` — an **inline SVG data URI** placeholder
+  ("Image unavailable") shown if a question's `image_url` fails to load. Inline so the fallback
+  itself can't 404.
+- **Verified:** the Network tab shows the `questions?select=*` request to Supabase (200). React
+  StrictMode double-fires the fetch in dev — harmless.
 
 ---
 

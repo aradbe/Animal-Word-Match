@@ -10,6 +10,7 @@
 
 import { MOCK_QUESTIONS } from "../data/mockQuestions";
 import { cloneData, wait } from "./mockApi";
+import { supabase } from "../lib/supabase"
 
 let questions = cloneData(MOCK_QUESTIONS);
 
@@ -22,9 +23,24 @@ export async function getQuestions(level, amount = 10) {
 }
 
 export async function getAllQuestions() {
-  await wait();
+  try {
+    const { data, error } = await supabase
+      .from("questions")
+      .select("*");
 
-  return cloneData(questions);
+    if (error) throw error;
+
+    // Empty table - fall back to mock so the game still works
+    if (!data || data.length === 0) {
+      return cloneData(MOCK_QUESTIONS);
+    }
+
+    return data;
+  } catch (err) {
+    
+    console.error("getAllQuestions failed, using mock fallback:", err);
+    return cloneData(MOCK_QUESTIONS);
+  }
 }
 
 export async function generateQuestion(topic, level) {
