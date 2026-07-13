@@ -10,8 +10,8 @@ function WelcomePage() {
   const navigate = useNavigate();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  function handlePlayAsGuest() {
-    navigate("/game");
+  function handleStartGame() {
+    navigate(authStore.isLoggedIn ? "/game/play" : "/game");
   }
 
   function handleLoginClick() {
@@ -35,10 +35,9 @@ function WelcomePage() {
       <h1>Animal Word Match</h1>
       <p>Learn animal words the fun way!</p>
 
-      <button onClick={handlePlayAsGuest}>Play as guest</button>
-
       {authStore.isLoggedIn ? (
         <>
+          <button onClick={handleStartGame}>Start Game</button>
           {authStore.isAdmin && (
             <button onClick={() => navigate("/admin")}>Admin dashboard</button>
           )}
@@ -46,7 +45,10 @@ function WelcomePage() {
           <button onClick={handleLogout}>Logout</button>
         </>
       ) : (
-        <button onClick={handleLoginClick}>Login</button>
+        <>
+          <button onClick={handleStartGame}>Play as guest</button>
+          <button onClick={handleLoginClick}>Login</button>
+        </>
       )}
 
       <AuthModal

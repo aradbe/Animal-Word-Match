@@ -1,10 +1,12 @@
 
+/* eslint-disable react-refresh/only-export-components */
+
 import { useNavigate } from "react-router-dom";
+import { observer } from "mobx-react-lite";
+import { authStore } from "../stores/authStore";
 
 function GameStartPage() {
   const navigate = useNavigate();
-
-  const isLoggedIn = true;
 
   return (
     <main>
@@ -14,7 +16,7 @@ function GameStartPage() {
         Start Game
       </button>
 
-      {isLoggedIn && (
+      {authStore.isLoggedIn && (
         <button onClick={() => navigate("/progress")}>
           My Progress
         </button>
@@ -23,4 +25,4 @@ function GameStartPage() {
   );
 }
 
-export default GameStartPage;
+export default observer(GameStartPage);
