@@ -5,3 +5,4 @@
 
 export * as authService from "./authService";
 export * as questionService from "./questionService";
+export * as gameResultService from "./gameResultService"
