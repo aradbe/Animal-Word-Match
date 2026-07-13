@@ -1,19 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { withSupabase } from "jsr:@supabase/server@1";
-import { GoogleGenAI } from "npm:@google/genai";
+// import { GoogleGenAI } from "npm:@google/genai";
 
 const STORAGE_BUCKET = "animal-images";
 
-const CLOUDFLARE_IMAGE_MODEL =
-  "@cf/bytedance/stable-diffusion-xl-lightning";
+const CLOUDFLARE_IMAGE_MODEL = "@cf/bytedance/stable-diffusion-xl-lightning";
 
-const ALLOWED_TOPICS = [
-  "farm",
-  "sea",
-  "jungle",
-  "forest",
-  "arctic",
-] as const;
+const ALLOWED_TOPICS = ["farm", "sea", "jungle", "forest", "arctic"] as const;
 
 type Topic = (typeof ALLOWED_TOPICS)[number];
 type Level = 1 | 2 | 3;
@@ -37,15 +30,7 @@ const TOPIC_BACKGROUNDS: Record<Topic, string> = {
   arctic: "an empty snowy Arctic landscape with ice",
 };
 
-/*
-These are the 35 animals already used in the main game.
-
-They are also used to create suitable distractors for fallback questions.
-*/
-const CURRENT_ANIMALS: Record<
-  Topic,
-  Record<Level, string[]>
-> = {
+const CURRENT_ANIMALS: Record<Topic, Record<Level, string[]>> = {
   farm: {
     1: ["cow", "pig", "horse"],
     2: ["sheep", "goat"],
@@ -77,14 +62,7 @@ const CURRENT_ANIMALS: Record<
   },
 };
 
-/*
-If Gemini fails, the function chooses an unused animal
-from this list for the requested topic and level.
-*/
-const FALLBACK_ANIMALS: Record<
-  Topic,
-  Record<Level, string[]>
-> = {
+const FALLBACK_ANIMALS: Record<Topic, Record<Level, string[]>> = {
   farm: {
     1: ["chicken", "duck"],
     2: ["goose", "rooster"],
@@ -122,8 +100,7 @@ const questionSchema = {
   properties: {
     correct_word: {
       type: "string",
-      description:
-        "The common lowercase English name of one animal.",
+      description: "The common lowercase English name of one animal.",
     },
 
     distractors: {
@@ -140,41 +117,23 @@ const questionSchema = {
     },
   },
 
-  required: [
-    "correct_word",
-    "distractors",
-  ],
+  required: ["correct_word", "distractors"],
 };
 
 function cleanWord(word: string): string {
   return word.trim().toLowerCase();
 }
 
-function isAllowedTopic(
-  topic: string,
-): topic is Topic {
-  return ALLOWED_TOPICS.includes(
-    topic as Topic,
-  );
+function isAllowedTopic(topic: string): topic is Topic {
+  return ALLOWED_TOPICS.includes(topic as Topic);
 }
 
-function isAllowedLevel(
-  level: number,
-): level is Level {
-  return (
-    level === 1 ||
-    level === 2 ||
-    level === 3
-  );
+function isAllowedLevel(level: number): level is Level {
+  return level === 1 || level === 2 || level === 3;
 }
 
-function getImageExtension(
-  mimeType: string,
-): string {
-  if (
-    mimeType === "image/jpeg" ||
-    mimeType === "image/jpg"
-  ) {
+function getImageExtension(mimeType: string): string {
+  if (mimeType === "image/jpeg" || mimeType === "image/jpg") {
     return "jpg";
   }
 
@@ -186,78 +145,47 @@ function getImageExtension(
 }
 
 function createRandomSeed(): number {
-  return Math.floor(
-    Math.random() * 2147483647,
-  );
+  return Math.floor(Math.random() * 2147483647);
 }
 
 function validateGeneratedQuestion(
   generated: GeneratedQuestion,
 ): GeneratedQuestion {
   if (
-    typeof generated.correct_word !==
-      "string" ||
+    typeof generated.correct_word !== "string" ||
     !Array.isArray(generated.distractors)
   ) {
-    throw new Error(
-      "Gemini returned an invalid question structure.",
-    );
+    throw new Error("Gemini returned an invalid question structure.");
   }
 
-  if (
-    generated.distractors.some(
-      (word) => typeof word !== "string",
-    )
-  ) {
-    throw new Error(
-      "Gemini returned an invalid distractor.",
-    );
+  if (generated.distractors.some((word) => typeof word !== "string")) {
+    throw new Error("Gemini returned an invalid distractor.");
   }
 
-  const correctWord = cleanWord(
-    generated.correct_word,
-  );
+  const correctWord = cleanWord(generated.correct_word);
 
-  const distractors =
-    generated.distractors.map(cleanWord);
+  const distractors = generated.distractors.map(cleanWord);
 
   if (!correctWord) {
-    throw new Error(
-      "Gemini returned an empty correct word.",
-    );
+    throw new Error("Gemini returned an empty correct word.");
   }
 
   if (distractors.length !== 3) {
-    throw new Error(
-      "Gemini must return exactly three distractors.",
-    );
+    throw new Error("Gemini must return exactly three distractors.");
   }
 
-  if (
-    distractors.some(
-      (word) => !word,
-    )
-  ) {
-    throw new Error(
-      "Gemini returned an empty distractor.",
-    );
+  if (distractors.some((word) => !word)) {
+    throw new Error("Gemini returned an empty distractor.");
   }
 
-  const uniqueDistractors =
-    new Set(distractors);
+  const uniqueDistractors = new Set(distractors);
 
   if (uniqueDistractors.size !== 3) {
-    throw new Error(
-      "Gemini returned duplicate distractors.",
-    );
+    throw new Error("Gemini returned duplicate distractors.");
   }
 
-  if (
-    uniqueDistractors.has(correctWord)
-  ) {
-    throw new Error(
-      "The correct word also appears in the distractors.",
-    );
+  if (uniqueDistractors.has(correctWord)) {
+    throw new Error("The correct word also appears in the distractors.");
   }
 
   return {
@@ -273,57 +201,29 @@ function buildFallbackDistractors(
 ): string[] {
   const levels: Level[] = [1, 2, 3];
 
-  /*
-  Animals from the requested level are placed first,
-  so distractors are usually close in difficulty.
-  */
   const candidates = [
     ...FALLBACK_ANIMALS[topic][level],
     ...CURRENT_ANIMALS[topic][level],
 
     ...levels
-      .filter(
-        (currentLevel) =>
-          currentLevel !== level,
-      )
-      .flatMap(
-        (currentLevel) =>
-          CURRENT_ANIMALS[topic][
-            currentLevel
-          ],
-      ),
+      .filter((currentLevel) => currentLevel !== level)
+      .flatMap((currentLevel) => CURRENT_ANIMALS[topic][currentLevel]),
 
     ...levels
-      .filter(
-        (currentLevel) =>
-          currentLevel !== level,
-      )
-      .flatMap(
-        (currentLevel) =>
-          FALLBACK_ANIMALS[topic][
-            currentLevel
-          ],
-      ),
+      .filter((currentLevel) => currentLevel !== level)
+      .flatMap((currentLevel) => FALLBACK_ANIMALS[topic][currentLevel]),
   ];
 
   const uniqueCandidates = [
     ...new Set(
-      candidates
-        .map(cleanWord)
-        .filter(
-          (animal) =>
-            animal !== correctWord,
-        ),
+      candidates.map(cleanWord).filter((animal) => animal !== correctWord),
     ),
   ];
 
-  const distractors =
-    uniqueCandidates.slice(0, 3);
+  const distractors = uniqueCandidates.slice(0, 3);
 
   if (distractors.length !== 3) {
-    throw new Error(
-      "Could not create three fallback distractors.",
-    );
+    throw new Error("Could not create three fallback distractors.");
   }
 
   return distractors;
@@ -334,13 +234,9 @@ function createFallbackQuestion(
   level: Level,
   existingWords: Set<string>,
 ): GeneratedQuestion {
-  const availableAnimals =
-    FALLBACK_ANIMALS[topic][level].filter(
-      (animal) =>
-        !existingWords.has(
-          cleanWord(animal),
-        ),
-    );
+  const availableAnimals = FALLBACK_ANIMALS[topic][level].filter(
+    (animal) => !existingWords.has(cleanWord(animal)),
+  );
 
   if (availableAnimals.length === 0) {
     throw new Error(
@@ -348,24 +244,14 @@ function createFallbackQuestion(
     );
   }
 
-  const randomIndex = Math.floor(
-    Math.random() *
-      availableAnimals.length,
-  );
+  const randomIndex = Math.floor(Math.random() * availableAnimals.length);
 
-  const correctWord = cleanWord(
-    availableAnimals[randomIndex],
-  );
+  const correctWord = cleanWord(availableAnimals[randomIndex]);
 
   return {
     correct_word: correctWord,
 
-    distractors:
-      buildFallbackDistractors(
-        topic,
-        level,
-        correctWord,
-      ),
+    distractors: buildFallbackDistractors(topic, level, correctWord),
   };
 }
 
@@ -374,17 +260,14 @@ export default {
     { auth: "user" },
 
     async (req, ctx) => {
-      let uploadedFilePath:
-        | string
-        | null = null;
+      let uploadedFilePath: string | null = null;
 
       try {
         if (req.method !== "POST") {
           return Response.json(
             {
               success: false,
-              error:
-                "Only POST requests are allowed.",
+              error: "Only POST requests are allowed.",
             },
             {
               status: 405,
@@ -392,49 +275,60 @@ export default {
           );
         }
 
-        const cloudflareAccountId =
-          Deno.env.get(
-            "CLOUDFLARE_ACCOUNT_ID",
-          );
+        // Only administrators may generate questions.
+        const userId = ctx.userClaims?.id ?? ctx.jwtClaims?.sub;
 
-        const cloudflareApiToken =
-          Deno.env.get(
-            "CLOUDFLARE_API_TOKEN",
-          );
+        if (!userId) {
+          throw new Error("Authenticated user was not found.");
+        }
 
-        const geminiApiKey =
-          Deno.env.get(
-            "GEMINI_API_KEY",
-          );
+        const { data: profile, error: profileError } = await ctx.supabaseAdmin
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .maybeSingle();
 
-        const geminiModel =
-          Deno.env.get(
-            "GEMINI_MODEL",
-          ) ?? "gemini-3.5-flash";
+        if (profileError) {
+          throw new Error(`Could not check user role: ${profileError.message}`);
+        }
 
-        if (!cloudflareAccountId) {
-          throw new Error(
-            "CLOUDFLARE_ACCOUNT_ID secret is missing.",
+        if (!profile || profile.role !== "admin") {
+          return Response.json(
+            {
+              success: false,
+              error: "Only administrators can generate questions.",
+            },
+            {
+              status: 403,
+            },
           );
         }
 
+        const cloudflareAccountId = Deno.env.get("CLOUDFLARE_ACCOUNT_ID");
+
+        const cloudflareApiToken = Deno.env.get("CLOUDFLARE_API_TOKEN");
+
+        const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+
+        const geminiModel = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
+
+        if (!cloudflareAccountId) {
+          throw new Error("CLOUDFLARE_ACCOUNT_ID secret is missing.");
+        }
+
         if (!cloudflareApiToken) {
-          throw new Error(
-            "CLOUDFLARE_API_TOKEN secret is missing.",
-          );
+          throw new Error("CLOUDFLARE_API_TOKEN secret is missing.");
         }
 
         let body: RequestPayload;
 
         try {
-          body =
-            (await req.json()) as RequestPayload;
+          body = (await req.json()) as RequestPayload;
         } catch {
           return Response.json(
             {
               success: false,
-              error:
-                "The request body must be valid JSON.",
+              error: "The request body must be valid JSON.",
             },
             {
               status: 400,
@@ -443,16 +337,11 @@ export default {
         }
 
         const topic =
-          typeof body.topic === "string"
-            ? cleanWord(body.topic)
-            : "";
+          typeof body.topic === "string" ? cleanWord(body.topic) : "";
 
-        const level = Number(
-          body.level,
-        );
+        const level = Number(body.level);
 
-        const forceFallback =
-          body.force_fallback === true;
+        const forceFallback = body.force_fallback === true;
 
         if (!topic) {
           return Response.json(
@@ -466,14 +355,11 @@ export default {
           );
         }
 
-        if (
-          !isAllowedTopic(topic)
-        ) {
+        if (!isAllowedTopic(topic)) {
           return Response.json(
             {
               success: false,
-              error:
-                "Topic must be farm, sea, jungle, forest, or arctic.",
+              error: "Topic must be farm, sea, jungle, forest, or arctic.",
             },
             {
               status: 400,
@@ -481,15 +367,11 @@ export default {
           );
         }
 
-        if (
-          !Number.isInteger(level) ||
-          !isAllowedLevel(level)
-        ) {
+        if (!Number.isInteger(level) || !isAllowedLevel(level)) {
           return Response.json(
             {
               success: false,
-              error:
-                "Level must be 1, 2, or 3.",
+              error: "Level must be 1, 2, or 3.",
             },
             {
               status: 400,
@@ -498,17 +380,15 @@ export default {
         }
 
         /*
-        Read existing questions so that Gemini and the
-        fallback do not deliberately create an existing animal.
-        */
-        const {
-          data: existingQuestions,
-          error: existingQuestionsError,
-        } = await ctx.supabaseAdmin
-          .from("questions")
-          .select("correct_word")
-          .eq("topic", topic)
-          .eq("level", level);
+         * Check all existing animals in this topic.
+         * This matches the database unique index:
+         * topic + correct_word.
+         */
+        const { data: existingQuestions, error: existingQuestionsError } =
+          await ctx.supabaseAdmin
+            .from("questions")
+            .select("correct_word")
+            .eq("topic", topic);
 
         if (existingQuestionsError) {
           throw new Error(
@@ -516,52 +396,36 @@ export default {
           );
         }
 
-        const existingWords =
-          new Set(
-            (
-              existingQuestions ?? []
-            ).map((question) =>
-              cleanWord(
-                question.correct_word,
-              ),
-            ),
-          );
+        const existingWords = new Set(
+          (existingQuestions ?? []).map((question) =>
+            cleanWord(question.correct_word),
+          ),
+        );
 
-        let generatedQuestion:
-          | GeneratedQuestion
-          | null = null;
+        let generatedQuestion: GeneratedQuestion | null = null;
 
-        let generationSource:
-          | "gemini"
-          | "fallback" =
-          "gemini";
+        let generationSource: "gemini" | "fallback" = "gemini";
 
-        let fallbackReason:
-          | string
-          | null = null;
+        let fallbackReason: string | null = null;
 
         /*
-        Try Gemini first.
-
-        Any Gemini error, quota problem, invalid JSON,
-        invalid answer or duplicate answer activates fallback.
-        */
-        if (
-          !forceFallback &&
-          geminiApiKey
-        ) {
+         * Try Gemini first.
+         *
+         * Quota errors, invalid JSON, invalid answers,
+         * and duplicate answers all activate fallback.
+         */
+        if (!forceFallback && geminiApiKey) {
           try {
-            const ai =
-              new GoogleGenAI({
-                apiKey:
-                  geminiApiKey,
-              });
+            const { GoogleGenAI } = await import("npm:@google/genai");
 
-            const questionInteraction =
-              await ai.interactions.create({
-                model: geminiModel,
+            const ai = new GoogleGenAI({
+              apiKey: geminiApiKey,
+            });
 
-                input: `
+            const questionInteraction = await ai.interactions.create({
+              model: geminiModel,
+
+              input: `
 Create one animal word-to-image matching question.
 
 Requested habitat:
@@ -594,112 +458,73 @@ Rules:
 - Do not repeat a distractor.
 - Do not return people, buildings, objects, food, jobs, plants or vehicles.
 - Do not use penguin for the Arctic habitat.
+- Do not return any animal that already exists in this topic:
+${[...existingWords].join(", ")}
                 `,
 
-                response_format: {
-                  type: "text",
-                  mime_type:
-                    "application/json",
-                  schema:
-                    questionSchema,
-                },
-              });
+              response_format: {
+                type: "text",
+                mime_type: "application/json",
+                schema: questionSchema,
+              },
+            });
 
-            if (
-              !questionInteraction.output_text
-            ) {
-              throw new Error(
-                "Gemini returned no question data.",
-              );
+            if (!questionInteraction.output_text) {
+              throw new Error("Gemini returned no question data.");
             }
 
-            const parsedQuestion =
-              JSON.parse(
-                questionInteraction.output_text,
-              ) as GeneratedQuestion;
+            const parsedQuestion = JSON.parse(
+              questionInteraction.output_text,
+            ) as GeneratedQuestion;
 
-            const validatedQuestion =
-              validateGeneratedQuestion(
-                parsedQuestion,
-              );
+            const validatedQuestion = validateGeneratedQuestion(parsedQuestion);
 
-            if (
-              existingWords.has(
-                validatedQuestion.correct_word,
-              )
-            ) {
+            if (existingWords.has(validatedQuestion.correct_word)) {
               throw new Error(
                 `Gemini generated the existing question "${validatedQuestion.correct_word}".`,
               );
             }
 
-            generatedQuestion =
-              validatedQuestion;
+            generatedQuestion = validatedQuestion;
           } catch (error) {
             fallbackReason =
               error instanceof Error
                 ? error.message
                 : "Gemini generation failed.";
 
-            console.warn(
-              "Gemini failed. Using fallback:",
-              fallbackReason,
-            );
+            console.warn("Gemini failed. Using fallback:", fallbackReason);
           }
-        } else if (
-          forceFallback
-        ) {
-          fallbackReason =
-            "Fallback was forced for testing.";
+        } else if (forceFallback) {
+          fallbackReason = "Fallback was forced for testing.";
         } else {
-          fallbackReason =
-            "GEMINI_API_KEY is missing.";
+          fallbackReason = "GEMINI_API_KEY is missing.";
         }
 
-        /*
-        Gemini did not produce a usable question,
-        so use a curated unused fallback.
-        */
         if (!generatedQuestion) {
-          generationSource =
-            "fallback";
+          generationSource = "fallback";
 
-          generatedQuestion =
-            createFallbackQuestion(
-              topic,
-              level,
-              existingWords,
-            );
+          generatedQuestion = createFallbackQuestion(
+            topic,
+            level,
+            existingWords,
+          );
         }
 
-        const topicBackground =
-          TOPIC_BACKGROUNDS[topic];
+        const topicBackground = TOPIC_BACKGROUNDS[topic];
 
-        /*
-        Generate a realistic image.
+        const cloudflareUrl = `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/${CLOUDFLARE_IMAGE_MODEL}`;
 
-        The prompt is created by our code instead of Gemini,
-        preventing Gemini from introducing text or poster layouts.
-        */
-        const cloudflareUrl =
-          `https://api.cloudflare.com/client/v4/accounts/${cloudflareAccountId}/ai/run/${CLOUDFLARE_IMAGE_MODEL}`;
+        const imageResponse = await fetch(cloudflareUrl, {
+          method: "POST",
 
-        const imageResponse =
-          await fetch(
-            cloudflareUrl,
-            {
-              method: "POST",
+          headers: {
+            Authorization: `Bearer ${cloudflareApiToken}`,
 
-              headers: {
-                Authorization:
-                  `Bearer ${cloudflareApiToken}`,
+            "Content-Type": "application/json",
+          },
 
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                prompt: `
+          body: JSON.stringify({
+            prompt: `
 Create a photorealistic natural image of exactly one animal.
 
 Subject:
@@ -742,7 +567,7 @@ Important:
 - No tools.
                 `,
 
-                negative_prompt: `
+            negative_prompt: `
 text,
 words,
 letters,
@@ -808,123 +633,70 @@ painting,
 3d render
                 `,
 
-                width: 1024,
-                height: 1024,
-                num_steps: 20,
-                guidance: 10,
-                seed:
-                  createRandomSeed(),
-              }),
-            },
-          );
+            width: 768,
+            height: 768,
+            num_steps: 20,
+            guidance: 10,
+            seed: createRandomSeed(),
+          }),
+        });
 
         if (!imageResponse.ok) {
-          const cloudflareError =
-            await imageResponse.text();
+          const cloudflareError = await imageResponse.text();
 
           throw new Error(
             `Cloudflare image generation failed (${imageResponse.status}): ${cloudflareError}`,
           );
         }
 
-        const imageArrayBuffer =
-          await imageResponse.arrayBuffer();
+        const responseContentType = imageResponse.headers
+          .get("content-type")
+          ?.split(";")[0]
+          .trim();
 
-        if (
-          imageArrayBuffer.byteLength ===
-          0
-        ) {
-          throw new Error(
-            "Cloudflare returned an empty image.",
-          );
+        const imageMimeType = responseContentType?.startsWith("image/")
+          ? responseContentType
+          : "image/png";
+
+        const imageExtension = getImageExtension(imageMimeType);
+
+        const imageBlob = await imageResponse.blob();
+
+        if (imageBlob.size === 0) {
+          throw new Error("Cloudflare returned an empty image.");
         }
 
-        const responseContentType =
-          imageResponse.headers
-            .get("content-type")
-            ?.split(";")[0]
-            .trim();
+        uploadedFilePath = `generated/${crypto.randomUUID()}.${imageExtension}`;
 
-        const imageMimeType =
-          responseContentType?.startsWith(
-            "image/",
-          )
-            ? responseContentType
-            : "image/png";
+        const { error: uploadError } = await ctx.supabaseAdmin.storage
+          .from(STORAGE_BUCKET)
+          .upload(uploadedFilePath, imageBlob, {
+            contentType: imageMimeType,
 
-        const imageExtension =
-          getImageExtension(
-            imageMimeType,
-          );
+            cacheControl: "31536000",
 
-        const imageBlob =
-          new Blob(
-            [imageArrayBuffer],
-            {
-              type: imageMimeType,
-            },
-          );
-
-        /*
-        Upload the image to Storage.
-        */
-        uploadedFilePath =
-          `generated/${crypto.randomUUID()}.${imageExtension}`;
-
-        const {
-          error: uploadError,
-        } =
-          await ctx.supabaseAdmin.storage
-            .from(STORAGE_BUCKET)
-            .upload(
-              uploadedFilePath,
-              imageBlob,
-              {
-                contentType:
-                  imageMimeType,
-
-                cacheControl:
-                  "31536000",
-
-                upsert: false,
-              },
-            );
+            upsert: false,
+          });
 
         if (uploadError) {
-          throw new Error(
-            `Image upload failed: ${uploadError.message}`,
-          );
+          throw new Error(`Image upload failed: ${uploadError.message}`);
         }
 
-        const {
-          data: publicUrlData,
-        } =
-          ctx.supabaseAdmin.storage
-            .from(STORAGE_BUCKET)
-            .getPublicUrl(
-              uploadedFilePath,
-            );
+        const { data: publicUrlData } = ctx.supabaseAdmin.storage
+          .from(STORAGE_BUCKET)
+          .getPublicUrl(uploadedFilePath);
 
-        const imageUrl =
-          publicUrlData.publicUrl;
+        const imageUrl = publicUrlData.publicUrl;
 
-        /*
-        Insert the completed question.
-        */
-        const {
-          data: insertedQuestion,
-          error: insertError,
-        } =
+        const { data: insertedQuestion, error: insertError } =
           await ctx.supabaseAdmin
             .from("questions")
             .insert({
               image_url: imageUrl,
 
-              correct_word:
-                generatedQuestion.correct_word,
+              correct_word: generatedQuestion.correct_word,
 
-              distractors:
-                generatedQuestion.distractors,
+              distractors: generatedQuestion.distractors,
 
               level,
               topic,
@@ -933,9 +705,13 @@ painting,
             .single();
 
         if (insertError) {
-          throw new Error(
-            `Question insert failed: ${insertError.message}`,
-          );
+          if (insertError.code === "23505") {
+            throw new Error(
+              `A "${generatedQuestion.correct_word}" question already exists in the ${topic} topic.`,
+            );
+          }
+
+          throw new Error(`Question insert failed: ${insertError.message}`);
         }
 
         uploadedFilePath = null;
@@ -943,43 +719,27 @@ painting,
         return Response.json({
           success: true,
 
-          generation_source:
-            generationSource,
+          generation_source: generationSource,
 
           fallback_reason:
-            generationSource ===
-            "fallback"
-              ? fallbackReason
-              : null,
+            generationSource === "fallback" ? fallbackReason : null,
 
-          question:
-            insertedQuestion,
+          question: insertedQuestion,
         });
       } catch (error) {
-        console.error(
-          "generate-question error:",
-          error,
-        );
+        console.error("generate-question error:", error);
 
         /*
-        If the image uploaded but database insertion failed,
-        remove the unused image.
-        */
+         * Remove the uploaded image when database
+         * insertion or another later operation fails.
+         */
         if (uploadedFilePath) {
-          const {
-            error: cleanupError,
-          } =
-            await ctx.supabaseAdmin.storage
-              .from(STORAGE_BUCKET)
-              .remove([
-                uploadedFilePath,
-              ]);
+          const { error: cleanupError } = await ctx.supabaseAdmin.storage
+            .from(STORAGE_BUCKET)
+            .remove([uploadedFilePath]);
 
           if (cleanupError) {
-            console.error(
-              "Image cleanup failed:",
-              cleanupError,
-            );
+            console.error("Image cleanup failed:", cleanupError);
           }
         }
 
