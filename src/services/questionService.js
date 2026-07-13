@@ -47,7 +47,7 @@ async function getFunctionErrorMessage(error) {
         return responseBody.message;
       }
     } catch {
-      // Fall back to the normal error message.
+      // Use the original error message below.
     }
   }
 
@@ -69,23 +69,51 @@ function shuffleQuestions(items) {
   return shuffled;
 }
 
-export async function getQuestions(level, amount = 10) {
+export async function getQuestionsByFilters({
+  topic = null,
+  level = null,
+  amount = 10,
+} = {}) {
   if (!supabase) {
-    return cloneData(MOCK_QUESTIONS)
-      .filter((question) => question.level === Number(level))
-      .slice(0, amount);
+    let questions = cloneData(MOCK_QUESTIONS);
+
+    if (topic) {
+      questions = questions.filter((question) => question.topic === topic);
+    }
+
+    if (level !== null && level !== undefined) {
+      questions = questions.filter(
+        (question) => question.level === Number(level),
+      );
+    }
+
+    return shuffleQuestions(questions).slice(0, amount);
   }
 
-  const { data, error } = await supabase
-    .from("questions")
-    .select("*")
-    .eq("level", Number(level));
+  let query = supabase.from("questions").select("*");
+
+  if (topic) {
+    query = query.eq("topic", topic);
+  }
+
+  if (level !== null && level !== undefined) {
+    query = query.eq("level", Number(level));
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
   }
 
   return shuffleQuestions(data ?? []).slice(0, amount);
+}
+
+export async function getQuestions(level, amount = 10) {
+  return getQuestionsByFilters({
+    level,
+    amount,
+  });
 }
 
 export async function getAllQuestions() {
@@ -118,6 +146,11 @@ export async function generateQuestion(topic, level) {
     body: {
       topic,
       level: Number(level),
+
+      /*
+       * Remove this tomorrow when testing
+       * Gemini again.
+       */
       force_fallback: true,
     },
   });
@@ -133,10 +166,6 @@ export async function generateQuestion(topic, level) {
   return data;
 }
 
-/*
- * Kept temporarily so another component importing
- * createQuestion does not break.
- */
 export async function createQuestion(questionData) {
   const result = await generateQuestion(questionData.topic, questionData.level);
 

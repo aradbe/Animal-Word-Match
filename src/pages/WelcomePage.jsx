@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
-import { Container, Stack, Card, Title, Text, Button, Box } from "@mantine/core";
+import {
+  Container,
+  Stack,
+  Card,
+  Title,
+  Text,
+  Button,
+  Box,
+} from "@mantine/core";
 import AuthModal from "../components/auth/AuthModal";
 import { authStore } from "../stores/authStore";
 
@@ -13,7 +21,7 @@ function WelcomePage() {
   const [authModalKey, setAuthModalKey] = useState(0);
 
   function handleStartGame() {
-    navigate(authStore.isLoggedIn ? "/game/play" : "/game");
+    navigate("/game");
   }
 
   function handleLoginClick() {
@@ -54,13 +62,26 @@ function WelcomePage() {
           🦁
         </Box>
 
-        <Title order={1} ta="center" fw={800} style={{ letterSpacing: "-.5px" }}>
-          <Text span inherit c="#3B342C">Animal </Text>
-          <Text span inherit c="brandTeal.6">Word </Text>
-          <Text span inherit c="coral.6">Match</Text>
+        <Title
+          order={1}
+          ta="center"
+          fw={800}
+          style={{ letterSpacing: "-.5px" }}
+        >
+          <Text span inherit c="#3B342C">
+            Animal{" "}
+          </Text>
+          <Text span inherit c="brandTeal.6">
+            Word{" "}
+          </Text>
+          <Text span inherit c="coral.6">
+            Match
+          </Text>
         </Title>
 
-        <Text c="dimmed" fw={600}>Learn animal words the fun way!</Text>
+        <Text c="dimmed" fw={600}>
+          Learn animal words the fun way!
+        </Text>
 
         <Card w="100%" shadow="sm" radius="lg" padding="lg" withBorder>
           <Stack gap="sm">
@@ -69,15 +90,32 @@ function WelcomePage() {
                 <Button size="md" fullWidth onClick={handleStartGame}>
                   Start Game
                 </Button>
-                <Button size="md" fullWidth variant="light" onClick={() => navigate("/progress")}>
+                <Button
+                  size="md"
+                  fullWidth
+                  variant="light"
+                  onClick={() => navigate("/progress")}
+                >
                   My progress
                 </Button>
                 {authStore.isAdmin && (
-                  <Button size="md" fullWidth variant="light" color="sunny" onClick={() => navigate("/admin")}>
+                  <Button
+                    size="md"
+                    fullWidth
+                    variant="light"
+                    color="sunny"
+                    onClick={() => navigate("/admin")}
+                  >
                     Admin dashboard
                   </Button>
                 )}
-                <Button size="md" fullWidth variant="subtle" color="gray" onClick={handleLogout}>
+                <Button
+                  size="md"
+                  fullWidth
+                  variant="subtle"
+                  color="gray"
+                  onClick={handleLogout}
+                >
                   Logout
                 </Button>
               </>
@@ -86,7 +124,12 @@ function WelcomePage() {
                 <Button size="md" fullWidth onClick={handleStartGame}>
                   Play as guest
                 </Button>
-                <Button size="md" fullWidth variant="light" onClick={handleLoginClick}>
+                <Button
+                  size="md"
+                  fullWidth
+                  variant="light"
+                  onClick={handleLoginClick}
+                >
                   Login
                 </Button>
               </>
