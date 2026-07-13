@@ -6,10 +6,16 @@
 --   - Guests and logged-in users can read questions and play.
 --   - Only logged-in users can save and read their own results.
 --   - Users can only read their own profile.
+--   - Frontend users cannot create, update, or delete questions.
+--   - Question generation and deletion happen through
+--     protected Supabase Edge Functions.
 --
 -- Note:
---   The "animal-images" Storage bucket was created manually
---   in the Supabase dashboard.
+--   The public "animal-images" Storage bucket is created
+--   manually in the Supabase dashboard.
+--
+--   The 35 real questions are added separately using
+--   seed-all.mjs. This file does not insert mock questions.
 -- ============================================================
 
 
@@ -30,24 +36,39 @@ create table if not exists public.profiles (
     on delete cascade,
 
   display_name text,
-  
-  role text not null default 'kid'
-  check (role in ('kid', 'admin')),
+
+  role text not null
+    default 'kid',
 
   created_at timestamptz not null
     default now()
 );
 
--- If the profiles table already exists, make sure the role column exists too.
+
+-- Make sure older versions of the table contain the role column.
+
 alter table public.profiles
-add column if not exists role text not null default 'kid'
-check (role in ('kid', 'admin'));
+add column if not exists role text not null
+default 'kid';
+
+
+-- Only allow valid application roles.
+
+alter table public.profiles
+drop constraint if exists profiles_role_check;
+
+alter table public.profiles
+add constraint profiles_role_check
+check (
+  role in ('kid', 'admin')
+);
+
 
 -- ============================================================
 -- AUTOMATIC PROFILE CREATION
 -- ============================================================
 
--- Creates a profile whenever a new user registers.
+-- Creates a profile automatically whenever a new user registers.
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -63,12 +84,15 @@ begin
   )
   values (
     new.id,
+
     coalesce(
       new.raw_user_meta_data ->> 'display_name',
       split_part(new.email, '@', 1)
     ),
+
     case
-      when lower(new.email) = 'admin@admin.com' then 'admin'
+      when lower(new.email) = 'admin@admin.com'
+        then 'admin'
       else 'kid'
     end
   )
@@ -92,19 +116,6 @@ create trigger on_auth_user_created
 -- ============================================================
 -- 2. QUESTIONS TABLE
 -- ============================================================
---
--- Matches the frontend MOCK_QUESTIONS structure:
---
--- {
---   id,
---   image_url,
---   correct_word,
---   distractors,
---   level,
---   topic,
---   created_at
--- }
--- ============================================================
 
 create table if not exists public.questions (
   id text primary key
@@ -122,29 +133,123 @@ create table if not exists public.questions (
   topic text not null,
 
   created_at timestamptz not null
-    default now(),
-
-  constraint questions_have_three_distractors
-    check (
-      cardinality(distractors) = 3
-    ),
-
-  constraint question_level_is_positive
-    check (
-      level > 0
-    ),
-
-  constraint correct_word_not_in_distractors
-    check (
-      array_position(distractors, correct_word) is null
-    )
+    default now()
 );
 
+
+-- Ensure required columns remain non-null.
+
+alter table public.questions
+alter column image_url set not null;
+
+alter table public.questions
+alter column correct_word set not null;
+
+alter table public.questions
+alter column distractors set not null;
+
+alter table public.questions
+alter column level set not null;
+
+alter table public.questions
+alter column topic set not null;
+
+
+-- Each question must contain exactly three distractors.
+
+alter table public.questions
+drop constraint if exists questions_have_three_distractors;
+
+alter table public.questions
+add constraint questions_have_three_distractors
+check (
+  cardinality(distractors) = 3
+);
+
+
+-- The correct answer cannot also be a distractor.
+
+alter table public.questions
+drop constraint if exists correct_word_not_in_distractors;
+
+alter table public.questions
+add constraint correct_word_not_in_distractors
+check (
+  array_position(distractors, correct_word) is null
+);
+
+
+-- Only levels 1, 2 and 3 are valid.
+
+alter table public.questions
+drop constraint if exists question_level_is_positive;
+
+alter table public.questions
+drop constraint if exists question_level_is_valid;
+
+alter table public.questions
+add constraint question_level_is_valid
+check (
+  level between 1 and 3
+);
+
+
+-- Only the five game topics are valid.
+
+alter table public.questions
+drop constraint if exists question_topic_is_valid;
+
+alter table public.questions
+add constraint question_topic_is_valid
+check (
+  topic in (
+    'farm',
+    'sea',
+    'jungle',
+    'forest',
+    'arctic'
+  )
+);
+
+
+-- Empty values are not valid questions.
+
+alter table public.questions
+drop constraint if exists question_correct_word_not_empty;
+
+alter table public.questions
+add constraint question_correct_word_not_empty
+check (
+  length(trim(correct_word)) > 0
+);
+
+
+alter table public.questions
+drop constraint if exists question_image_url_not_empty;
+
+alter table public.questions
+add constraint question_image_url_not_empty
+check (
+  length(trim(image_url)) > 0
+);
+
+
+-- Used when loading questions by topic and level.
 
 create index if not exists questions_topic_level_index
 on public.questions (
   topic,
   level
+);
+
+
+-- Prevent the same animal from being inserted more than once
+-- in the same topic, even if capitalization is different.
+
+create unique index if not exists questions_unique_topic_animal
+on public.questions (
+  lower(topic),
+  lower(correct_word)
 );
 
 
@@ -170,22 +275,65 @@ create table if not exists public.game_results (
   level smallint,
 
   created_at timestamptz not null
-    default now(),
+    default now()
+);
 
-  constraint score_is_not_negative
-    check (
-      score >= 0
-    ),
 
-  constraint total_questions_is_positive
-    check (
-      total_questions > 0
-    ),
+alter table public.game_results
+drop constraint if exists score_is_not_negative;
 
-  constraint score_not_above_total
-    check (
-      score <= total_questions
-    )
+alter table public.game_results
+add constraint score_is_not_negative
+check (
+  score >= 0
+);
+
+
+alter table public.game_results
+drop constraint if exists total_questions_is_positive;
+
+alter table public.game_results
+add constraint total_questions_is_positive
+check (
+  total_questions > 0
+);
+
+
+alter table public.game_results
+drop constraint if exists score_not_above_total;
+
+alter table public.game_results
+add constraint score_not_above_total
+check (
+  score <= total_questions
+);
+
+
+alter table public.game_results
+drop constraint if exists game_result_level_is_valid;
+
+alter table public.game_results
+add constraint game_result_level_is_valid
+check (
+  level is null
+  or level between 1 and 3
+);
+
+
+alter table public.game_results
+drop constraint if exists game_result_topic_is_valid;
+
+alter table public.game_results
+add constraint game_result_topic_is_valid
+check (
+  topic is null
+  or topic in (
+    'farm',
+    'sea',
+    'jungle',
+    'forest',
+    'arctic'
+  )
 );
 
 
@@ -214,63 +362,59 @@ enable row level security;
 -- TABLE PERMISSIONS
 -- ============================================================
 
--- Guests cannot access profiles at all.
+-- Reset previous permissions first.
 
 revoke all
 on public.profiles
-from anon;
+from anon, authenticated;
 
-
--- Reset old permissions for logged-in users.
--- This removes older grants like update if this script was run before.
 
 revoke all
-on public.profiles
-from authenticated;
+on public.questions
+from anon, authenticated;
 
 
--- Logged-in users can only read profiles.
--- RLS will ensure that they only access their own profile.
+revoke all
+on public.game_results
+from anon, authenticated;
+
+
+-- Logged-in users may read their own profile.
+-- RLS controls which profile row they can access.
 
 grant select
 on public.profiles
 to authenticated;
 
 
--- Guests cannot access saved game results.
-
-revoke all
-on public.game_results
-from anon;
-
-
--- Guests and logged-in users can read questions.
+-- Guests and logged-in users may read questions.
 
 grant select
 on public.questions
 to anon, authenticated;
 
 
--- Frontend users cannot create, edit, or delete questions.
-
-revoke insert, update, delete
-on public.questions
-from anon, authenticated;
-
-
--- Logged-in users can read and save game results.
--- RLS will ensure that they only access their own results.
+-- Logged-in users may read and save their own results.
+-- RLS controls which result rows they can access.
 
 grant select, insert
 on public.game_results
 to authenticated;
 
+
+-- No frontend role receives INSERT, UPDATE or DELETE
+-- permissions on questions. Edge Functions use the
+-- Supabase admin client for privileged operations.
+
+
 -- ============================================================
 -- PROFILES RLS POLICIES
 -- ============================================================
+
 drop policy if exists
   "Users can read their own profile"
 on public.profiles;
+
 
 create policy "Users can read their own profile"
 on public.profiles
@@ -281,27 +425,28 @@ using (
 );
 
 
+-- Remove the previous update policy.
+-- Users cannot update their role or other profile fields
+-- directly from the frontend.
+
 drop policy if exists
   "Users can update their own profile"
 on public.profiles;
 
+
 -- ============================================================
 -- QUESTIONS RLS POLICIES
 -- ============================================================
---
--- Guests and logged-in users can read questions.
--- No frontend role can insert, update, or delete questions.
--- ============================================================
-
--- Remove the previous registered-users-only policy.
 
 drop policy if exists
   "Authenticated users can read questions"
 on public.questions;
 
+
 drop policy if exists
   "Anyone can read questions"
 on public.questions;
+
 
 create policy "Anyone can read questions"
 on public.questions
@@ -309,16 +454,9 @@ for select
 to anon, authenticated
 using (true);
 
-grant select on public.questions
-to anon, authenticated;
-
 
 -- ============================================================
 -- GAME RESULTS RLS POLICIES
--- ============================================================
---
--- Guests cannot save scores.
--- Logged-in users can only read and save their own results.
 -- ============================================================
 
 drop policy if exists
@@ -347,67 +485,3 @@ to authenticated
 with check (
   (select auth.uid()) = user_id
 );
-
-
--- ============================================================
--- INITIAL MOCK QUESTIONS
--- ============================================================
-
-insert into public.questions (
-  id,
-  image_url,
-  correct_word,
-  distractors,
-  level,
-  topic,
-  created_at
-)
-values
-(
-  'mock-1',
-  'https://commons.wikimedia.org/wiki/Special:FilePath/Cow_female_black_white.jpg?width=600',
-  'cow',
-  array['pig', 'horse', 'sheep'],
-  1,
-  'farm',
-  '2026-07-09T09:00:00.000Z'
-),
-(
-  'mock-2',
-  'https://commons.wikimedia.org/wiki/Special:FilePath/Nokota_Horses.jpg?width=600',
-  'horse',
-  array['cow', 'goat', 'sheep'],
-  1,
-  'farm',
-  '2026-07-09T09:01:00.000Z'
-),
-(
-  'mock-3',
-  'https://commons.wikimedia.org/wiki/Special:FilePath/Rooster_portrait2.jpg?width=600',
-  'chicken',
-  array['duck', 'goose', 'turkey'],
-  2,
-  'farm',
-  '2026-07-09T09:02:00.000Z'
-),
-(
-  'mock-4',
-  'https://commons.wikimedia.org/wiki/Special:FilePath/Tursiops_truncatus_01.jpg?width=600',
-  'dolphin',
-  array['shark', 'whale', 'seal'],
-  2,
-  'sea',
-  '2026-07-09T09:03:00.000Z'
-),
-(
-  'mock-5',
-  'https://commons.wikimedia.org/wiki/Special:FilePath/Octopus_vulgaris_2.jpg?width=600',
-  'octopus',
-  array['squid', 'crab', 'jellyfish'],
-  3,
-  'sea',
-  '2026-07-09T09:04:00.000Z'
-)
-on conflict (id) do nothing;
-
-
