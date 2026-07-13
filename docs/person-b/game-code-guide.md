@@ -1,15 +1,17 @@
-# Game feature — code guide (B1 + B2 + B3 + B4)
+# Game feature — code guide (B1 + B2 + B3 + B4 + B5)
 
-A file-by-file explanation of Person B's game feature after **B1** (game UI), **B2** (MobX
-store: score/streak/round/results), **B3** (real questions from Supabase + loading/error/
-broken-image states), and **B4** (save results + My Progress page). Integrated into Ilan's
-(Person C) scaffold and arad's (Person A) Supabase. Update this doc at the end of each stage.
+A file-by-file explanation of Person B's game feature: **B1** (game UI), **B2** (MobX store:
+score/streak/round/results), **B3** (real questions from Supabase + loading/error/broken-image),
+**B4** (save results + My Progress), and **B5** (theme + mobile + confetti + animations).
+Integrated into Ilan's (C) scaffold and arad's (A) Supabase.
 
-> **Status:** B1–B4 complete (code). Game fetches real questions from Supabase, tracks
-> score/streak, and on finish **saves the result to `game_results` for logged-in users** (guests
-> play unsaved); a **My Progress** page lists a user's past results. NOTE: real saving only
-> persists once Ilan wires **real Supabase auth** — his `authService` is still a localStorage mock,
-> so mock-logged-in saves fail gracefully (caught). Next: **B5** (mobile polish/animations).
+> **Status:** B1–B5 complete (code). Warm/playful theme applied app-wide; game fetches real
+> questions from Supabase, tracks score/streak, saves results for logged-in users, My Progress
+> lists history, confetti + answer animations for delight, mobile-friendly, back-to-menu buttons.
+> NOTE: real saving only persists once Ilan wires **real Supabase auth** (his `authService` is
+> still a localStorage mock — mock-logged-in saves fail gracefully). Also: login accounts live in
+> localStorage per-browser, so you can only log in from the browser you signed up in until real
+> Supabase auth lands.
 
 ---
 
@@ -174,6 +176,31 @@ Tracks each finished round to `game_results` for logged-in users, and shows the 
   mock-logged-in save currently **fails gracefully** (logged, game unaffected) and Progress shows
   the empty state. Real persistence lights up when Ilan wires real Supabase auth. `topic`/`level`
   saved as `null` because a round mixes them (columns nullable).
+
+---
+
+## B5 — theme, mobile, confetti & animations
+
+- **Theme (`src/theme.js`)** — `createTheme` with the warm/playful palette from the agreed mockup:
+  `primaryColor: "brandTeal"`, custom colors `brandTeal` / `coral` / `sunny`, `defaultRadius: "lg"`,
+  Fredoka font. Applied via `<MantineProvider theme={theme}>` in `App.jsx`. Cream body background in
+  `index.css`; Fredoka `<link>` in `index.html`. Because the game uses Mantine tokens, it re-skins
+  automatically. (theme.js, App.jsx, index.html, index.css are shared/C's files — coordinated.)
+- **Themed pages** — `WelcomePage`, `GameStartPage`, and the `AuthModal` switch-link were converted
+  from plain HTML to Mantine components (C's files; logic untouched, only presentation).
+- **Confetti (`ResultsCard`)** — `canvas-confetti` (new dependency). A `useEffect` fires confetti on
+  the results screen only for a score ≥ 50% (bigger burst for a perfect score), and skips it under
+  `prefers-reduced-motion`. NOTE: if the demo machine has macOS "Reduce motion" ON, no confetti.
+- **Answer animations (`AnswerButton.jsx` + `AnswerButton.css`)** — `.answer-correct` pulses,
+  `.answer-wrong` shakes (CSS keyframes, class chosen by `status`), disabled under reduced motion.
+  Idle answer color changed to `brandTeal` to match the theme.
+- **QuestionCard** — removed the white `<Card>` wrapper; now a rounded `<Image>` (radius lg) inside
+  `AspectRatio` with the prompt on the cream background (no white band/border line).
+- **Back-to-menu buttons** — added on the game screen ("← Menu"), `ResultsCard` ("Back to menu"),
+  `ProgressPage` ("← Back to menu"), and `GameStartPage` — all `navigate('/')`. Results + Next
+  buttons made `fullWidth` for mobile.
+- **My Progress summary** — ProgressPage shows **Games played** + **Best score** (by ratio) above
+  the recent-games list.
 
 ---
 

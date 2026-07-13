@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
 import { useNavigate } from 'react-router-dom'
 import { Container, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
@@ -8,6 +8,7 @@ import QuestionCard from './QuestionCard'
 import AnswerButton from './AnswerButton'
 import ScoreBar from './ScoreBar'
 import ResultsCard from './ResultsCard'
+import './GamePage.css'
 
 // An observer component that just displays the store and calls its actions
 
@@ -23,8 +24,13 @@ import ResultsCard from './ResultsCard'
 
 const GamePage = observer(function GamePage() {
     const navigate = useNavigate()
+    const startedRef = useRef(false)
 
     useEffect(() => {
+        // Guard against React StrictMode running this effect twice in dev,
+        // which would fetch two different random rounds and flash the image.
+        if (startedRef.current) return
+        startedRef.current = true
         gameStore.startRound()
     }, [])
 
@@ -96,18 +102,20 @@ const GamePage = observer(function GamePage() {
                     Question {gameStore.currentIndex + 1} of {gameStore.totalQuestions}
                 </Text>
 
-                <QuestionCard question={question} />
+                <Stack key={gameStore.currentIndex} gap="lg" className="awm-question">
+                    <QuestionCard question={question} />
 
-                <Stack gap="sm">
-                    {answers.map((word) => (
-                        <AnswerButton
-                            key={word}
-                            word={word}
-                            status={getStatus(word)}
-                            disabled={gameStore.answered}
-                            onSelect={(w) => gameStore.selectAnswer(w)}
-                        />
-                    ))}
+                    <Stack gap="sm">
+                        {answers.map((word) => (
+                            <AnswerButton
+                                key={word}
+                                word={word}
+                                status={getStatus(word)}
+                                disabled={gameStore.answered}
+                                onSelect={(w) => gameStore.selectAnswer(w)}
+                            />
+                        ))}
+                    </Stack>
                 </Stack>
 
                 {gameStore.answered && (
