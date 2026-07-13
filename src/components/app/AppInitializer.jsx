@@ -1,15 +1,39 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect } from "react";
-import { observer } from "mobx-react-lite";
-import { Loader, Center } from "@mantine/core";
+
+import { useEffect, useState } from "react";
+import { Center, Loader } from "@mantine/core";
+
 import { authStore } from "../../stores/authStore";
 
 function AppInitializer({ children }) {
+  const [isReady, setIsReady] = useState(false);
+
   useEffect(() => {
-    authStore.restoreSession();
+    let isMounted = true;
+
+    async function initializeApp() {
+      await authStore.restoreSession();
+
+      if (isMounted) {
+        setIsReady(true);
+      }
+    }
+
+    initializeApp();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  if (authStore.isLoading) {
+  /*
+   * Only show the full-screen loader during
+   * the first session restoration.
+   *
+   * Login/signup loading must not unmount
+   * the router or authentication modal.
+   */
+  if (!isReady) {
     return (
       <Center h="100vh">
         <Loader />
@@ -20,4 +44,4 @@ function AppInitializer({ children }) {
   return children;
 }
 
-export default observer(AppInitializer);
+export default AppInitializer;

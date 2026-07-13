@@ -49,7 +49,7 @@ export default {
           );
         }
 
-        const userId = ctx.userClaims?.sub;
+        const userId = ctx.userClaims?.id ?? ctx.jwtClaims?.sub;
 
         if (!userId) {
           return Response.json(

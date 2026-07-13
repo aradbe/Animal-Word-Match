@@ -1,12 +1,19 @@
 import { wait } from "./mockApi";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const MOCK_AUTH_KEY = "animal-word-match-auth";
 const MOCK_USERS_KEY = "animal-word-match-users";
-const ADMIN_EMAIL = "admin@admin.com";
+const ADMIN_EMAILS = ["aradbeneliezer@gmail.com"];
 const ADMIN_PASSWORD = "Admin1234";
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
+}
+
+function isAdminEmail(email) {
+  const normalizedEmail = normalizeEmail(email || "");
+
+  return ADMIN_EMAILS.includes(normalizedEmail);
 }
 
 function getPasswordValidationError(password) {
@@ -68,22 +75,23 @@ function createProfile({ id, email, displayName }) {
   return {
     id,
     display_name: displayName || normalizedEmail.split("@")[0],
-    // Mock admin rule: in Supabase this should come from a profiles.role column.
-    role: normalizedEmail === ADMIN_EMAIL ? "admin" : "kid",
+    // Keep the local mock aligned with the configured admin emails.
+    role: isAdminEmail(normalizedEmail) ? "admin" : "kid",
   };
 }
 
-function getBuiltInAdmin() {
-  const id = "mock-admin-user";
+function getBuiltInAdmin(email) {
+  const normalizedEmail = normalizeEmail(email);
+  const id = `mock-admin-user-${normalizedEmail}`;
 
   return {
     id,
-    email: ADMIN_EMAIL,
+    email: normalizedEmail,
     password: ADMIN_PASSWORD,
     displayName: "Admin",
     profile: createProfile({
       id,
-      email: ADMIN_EMAIL,
+      email: normalizedEmail,
       displayName: "Admin",
     }),
   };
@@ -92,16 +100,54 @@ function getBuiltInAdmin() {
 function findUserByEmail(email) {
   const normalizedEmail = normalizeEmail(email);
 
-  if (normalizedEmail === ADMIN_EMAIL) {
-    return getBuiltInAdmin();
+  if (isAdminEmail(normalizedEmail)) {
+    return getBuiltInAdmin(normalizedEmail);
   }
 
   return readUsers().find((user) => user.email === normalizedEmail) || null;
 }
 
-export async function signUp({ email, password, displayName }) {
-  await wait();
+function getSupabaseErrorMessage(error) {
+  const message = error?.message || "Something went wrong. Please try again.";
+  const lowerMessage = message.toLowerCase();
 
+  if (lowerMessage.includes("already registered") || lowerMessage.includes("already exists")) {
+    return "This email is already registered.";
+  }
+
+  if (lowerMessage.includes("invalid login credentials")) {
+    return "Invalid email or password.";
+  }
+
+  return message;
+}
+
+async function getSupabaseProfile(userId) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, display_name, role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(getSupabaseErrorMessage(error));
+  }
+
+  return data;
+}
+
+function buildProfileFromSupabaseUser(user, profile) {
+  const normalizedEmail = normalizeEmail(user.email || "");
+
+  return {
+    id: user.id,
+    display_name: profile?.display_name || normalizedEmail.split("@")[0] || "Player",
+    // Supabase profile is the source of truth; admin email list is a local fallback.
+    role: profile?.role === "admin" || isAdminEmail(normalizedEmail) ? "admin" : "kid",
+  };
+}
+
+export async function signUp({ email, password, displayName }) {
   if (!email || !password) {
     throw new Error("Email and password are required.");
   }
@@ -113,6 +159,30 @@ export async function signUp({ email, password, displayName }) {
   if (passwordError) {
     throw new Error(passwordError);
   }
+
+  if (isSupabaseConfigured) {
+    // Supabase Auth owns the real users table, so duplicate emails are blocked there.
+    const { error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: {
+        data: {
+          display_name: displayName || normalizedEmail.split("@")[0],
+        },
+      },
+    });
+
+    if (error) {
+      throw new Error(getSupabaseErrorMessage(error));
+    }
+
+    return {
+      success: true,
+      email: normalizedEmail,
+    };
+  }
+
+  await wait();
 
   // Prevent duplicate accounts in the temporary localStorage mock database.
   if (findUserByEmail(normalizedEmail)) {
@@ -143,11 +213,31 @@ export async function signUp({ email, password, displayName }) {
 }
 
 export async function signIn({ email, password }) {
-  await wait();
-
   if (!email || !password) {
     throw new Error("Email and password are required.");
   }
+
+  const normalizedEmail = normalizeEmail(email);
+
+  if (isSupabaseConfigured) {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (error) {
+      throw new Error(getSupabaseErrorMessage(error));
+    }
+
+    const profile = buildProfileFromSupabaseUser(
+      data.session.user,
+      await getSupabaseProfile(data.session.user.id),
+    );
+
+    return { session: data.session, profile };
+  }
+
+  await wait();
 
   const user = findUserByEmail(email);
 
@@ -168,6 +258,16 @@ export async function signIn({ email, password }) {
 }
 
 export async function signOut() {
+  if (isSupabaseConfigured) {
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      throw new Error(getSupabaseErrorMessage(error));
+    }
+
+    return { success: true };
+  }
+
   await wait();
 
   clearAuthState();
@@ -176,6 +276,16 @@ export async function signOut() {
 }
 
 export async function getCurrentSession() {
+  if (isSupabaseConfigured) {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      throw new Error(getSupabaseErrorMessage(error));
+    }
+
+    return data.session;
+  }
+
   await wait();
 
   const { session } = readAuthState();
@@ -184,6 +294,19 @@ export async function getCurrentSession() {
 }
 
 export async function getCurrentProfile() {
+  if (isSupabaseConfigured) {
+    const session = await getCurrentSession();
+
+    if (!session?.user) {
+      return null;
+    }
+
+    return buildProfileFromSupabaseUser(
+      session.user,
+      await getSupabaseProfile(session.user.id),
+    );
+  }
+
   await wait();
 
   const { profile } = readAuthState();
