@@ -19,6 +19,10 @@ class AuthStore {
     return this.profile?.role === "admin";
   }
 
+  clearError() {
+    this.error = null;
+  }
+
   async restoreSession() {
     this.isLoading = true;
     this.error = null;
@@ -41,12 +45,12 @@ class AuthStore {
     this.error = null;
 
     try {
-      const { session, profile } = await authService.signUp(formData);
-
-      this.user = session.user;
-      this.profile = profile;
+      // Signup only creates the user. The user still needs to login manually.
+      await authService.signUp(formData);
+      return { success: true };
     } catch (error) {
       this.error = error.message;
+      return { success: false };
     } finally {
       this.isLoading = false;
     }
@@ -61,8 +65,13 @@ class AuthStore {
 
       this.user = session.user;
       this.profile = profile;
+
+      return { success: true, profile };
     } catch (error) {
+      this.user = null;
+      this.profile = null;
       this.error = error.message;
+      return { success: false };
     } finally {
       this.isLoading = false;
     }

@@ -1,7 +1,7 @@
 //import { useState } from 'react'
 import { MantineProvider } from "@mantine/core";
 import AppRouter from "./router/AppRouter";
-import AppInitializer from "./components/AppInitializer";
+import AppInitializer from "./components/app/AppInitializer";
 import "./App.css";
 
 
