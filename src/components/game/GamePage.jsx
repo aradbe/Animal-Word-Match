@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { observer } from 'mobx-react-lite'
+import { useNavigate } from 'react-router-dom'
 import { Container, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
 import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
@@ -21,6 +22,7 @@ import ResultsCard from './ResultsCard'
 */
 
 const GamePage = observer(function GamePage() {
+    const navigate = useNavigate()
 
     useEffect(() => {
         gameStore.startRound()
@@ -73,6 +75,7 @@ const GamePage = observer(function GamePage() {
                     total={gameStore.totalQuestions}
                     bestStreak={gameStore.bestStreak}
                     onPlayAgain={() => gameStore.startRound()}
+                    onBackToMenu={() => navigate('/')}
                 />
             </Container>
         )
@@ -85,6 +88,9 @@ const GamePage = observer(function GamePage() {
     return (
         <Container size="sm" py="xl">
             <Stack gap="lg">
+                <Button variant="subtle" onClick={() => navigate('/')} style={{ alignSelf: 'flex-start' }}>
+                    ← Menu
+                </Button>
                 <ScoreBar score={gameStore.score} streak={gameStore.streak}/>
                 <Text ta="center" fw={500} c="dimmed">
                     Question {gameStore.currentIndex + 1} of {gameStore.totalQuestions}
@@ -109,7 +115,7 @@ const GamePage = observer(function GamePage() {
                         <Text fw={700} c={gameStore.selected === question.correct_word ? 'green' : 'red'}>
                             {gameStore.selected === question.correct_word ? 'Correct!' : 'Oops, wrong!'}
                         </Text>
-                        <Button onClick={() => gameStore.next()} size="md">
+                        <Button onClick={() => gameStore.next()} size="md" fullWidth>
                             {gameStore.isLast ? 'Finish' : 'Next'}
                         </Button>
                     </Stack>

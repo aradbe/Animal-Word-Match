@@ -13,6 +13,7 @@
     "@mantine/core": "^9.4.1",
     "@mantine/hooks": "^9.4.1",
     "@supabase/supabase-js": "^2.110.1",
+    "canvas-confetti": "^1.9.4",
     "mobx": "^6.16.1",
     "mobx-react-lite": "^4.1.1",
     "react": "^19.2.7",

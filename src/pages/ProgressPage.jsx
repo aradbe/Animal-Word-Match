@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { observer } from 'mobx-react-lite'
-import { Container, Stack, Title, Text, Loader, Center, Card, Group } from '@mantine/core'
+import { useNavigate } from 'react-router-dom'
+import { Container, Stack, Title, Text, Loader, Center, Card, Group, Button } from '@mantine/core'
 import { authStore } from '../stores/authStore'
 import { gameResultService } from '../services'
 
 const ProgressPage = observer(function ProgressPage() {
+    const navigate = useNavigate()
     const [status, setStatus] = useState('loading') // 'loading' | 'ready' | 'error'
     const [results, setResults] = useState([])
 
@@ -39,6 +41,9 @@ const ProgressPage = observer(function ProgressPage() {
     return (
         <Container size="sm" py="xl">
             <Stack gap="lg">
+                <Button variant="subtle" onClick={() => navigate('/')} style={{ alignSelf: 'flex-start' }}>
+                    ← Back to menu
+                </Button>
                 <Title order={2}>My Progress</Title>
 
                 {status === 'loading' && (
