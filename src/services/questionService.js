@@ -23,6 +23,11 @@ export async function getQuestions(level, amount = 10) {
 }
 
 export async function getAllQuestions() {
+  // Until Supabase env vars exist locally, the game should still load mock questions.
+  if (!supabase) {
+    return cloneData(MOCK_QUESTIONS);
+  }
+
   try {
     const { data, error } = await supabase
       .from("questions")
