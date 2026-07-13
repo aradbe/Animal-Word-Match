@@ -29,6 +29,13 @@ const ProgressPage = observer(function ProgressPage() {
         return () => { active = false } // ignore the result if we unmounted
     }, [])
 
+    // Summary stats derived from the fetched results
+    const gamesPlayed = results.length
+    const best = results.length > 0
+        ? results.reduce((top, r) =>
+            r.score / r.total_questions > top.score / top.total_questions ? r : top)
+        : null
+
     return (
         <Container size="sm" py="xl">
             <Stack gap="lg">
@@ -47,18 +54,34 @@ const ProgressPage = observer(function ProgressPage() {
                 )}
 
                 {status === 'ready' && results.length > 0 && (
-                    <Stack gap="sm">
-                        {results.map((r) => (
-                            <Card key={r.id} withBorder padding="md" radius="md">
-                                <Group justify="space-between">
-                                    <Text fw={600}>{r.score} / {r.total_questions}</Text>
-                                    <Text size="sm" c="dimmed">
-                                        {new Date(r.created_at).toLocaleDateString()}
-                                    </Text>
-                                </Group>
-                            </Card>
-                        ))}
-                    </Stack>
+                    <>
+                        <Card withBorder padding="md" radius="md">
+                            <Group justify="space-around">
+                                <Stack gap={0} align="center">
+                                    <Text size="xl" fw={700}>{gamesPlayed}</Text>
+                                    <Text size="sm" c="dimmed">Games played</Text>
+                                </Stack>
+                                <Stack gap={0} align="center">
+                                    <Text size="xl" fw={700}>{best.score} / {best.total_questions}</Text>
+                                    <Text size="sm" c="dimmed">Best score</Text>
+                                </Stack>
+                            </Group>
+                        </Card>
+
+                        <Text fw={600} size="sm" c="dimmed">Recent games</Text>
+                        <Stack gap="sm">
+                            {results.map((r) => (
+                                <Card key={r.id} withBorder padding="md" radius="md">
+                                    <Group justify="space-between">
+                                        <Text fw={600}>{r.score} / {r.total_questions}</Text>
+                                        <Text size="sm" c="dimmed">
+                                            {new Date(r.created_at).toLocaleDateString()}
+                                        </Text>
+                                    </Group>
+                                </Card>
+                            ))}
+                        </Stack>
+                    </>
                 )}
             </Stack>
         </Container>

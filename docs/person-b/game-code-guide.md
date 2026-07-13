@@ -1,14 +1,15 @@
-# Game feature — code guide (B1 + B2 + B3)
+# Game feature — code guide (B1 + B2 + B3 + B4)
 
 A file-by-file explanation of Person B's game feature after **B1** (game UI), **B2** (MobX
-store: score/streak/round/results), and **B3** (real questions from Supabase + loading/error/
-broken-image states). Integrated into Ilan's (Person C) scaffold and arad's (Person A) Supabase.
-Update this doc at the end of each future stage (B4–B5).
+store: score/streak/round/results), **B3** (real questions from Supabase + loading/error/
+broken-image states), and **B4** (save results + My Progress page). Integrated into Ilan's
+(Person C) scaffold and arad's (Person A) Supabase. Update this doc at the end of each stage.
 
-> **Status:** B1 + B2 + B3 complete. Game renders through C's router at `/#/game/play`, powered
-> by a MobX store, fetching **real questions from Supabase** (via `questionService`, with a mock
-> fallback), with loading spinner, error+retry, and a broken-image placeholder. Verified live in
-> the Network tab. Next: **B4** (save results to `game_results`, My Progress page).
+> **Status:** B1–B4 complete (code). Game fetches real questions from Supabase, tracks
+> score/streak, and on finish **saves the result to `game_results` for logged-in users** (guests
+> play unsaved); a **My Progress** page lists a user's past results. NOTE: real saving only
+> persists once Ilan wires **real Supabase auth** — his `authService` is still a localStorage mock,
+> so mock-logged-in saves fail gracefully (caught). Next: **B5** (mobile polish/animations).
 
 ---
 
@@ -149,6 +150,30 @@ The game now loads **real questions from Supabase**, with proper async handling.
   itself can't 404.
 - **Verified:** the Network tab shows the `questions?select=*` request to Supabase (200). React
   StrictMode double-fires the fetch in dev — harmless.
+
+---
+
+## B4 — save results & My Progress
+
+Tracks each finished round to `game_results` for logged-in users, and shows the history.
+
+- **`gameResultService`** (`src/services/gameResultService.js`, exported via `services/index.js`):
+  - `saveGameResult(result)` → `supabase.from("game_results").insert(...).select().single()`;
+    throws on error (caller handles).
+  - `getUserProgress(userId)` → `select * where user_id eq, order created_at desc`; returns `[]`.
+- **`gameStore.saveResult()`** — called from `next()` when the round finishes. Guards with
+  `if (!authStore.isLoggedIn) return` (**guests play unsaved**); otherwise inserts
+  `{ user_id: authStore.user.id, score, total_questions, topic: null, level: null }` in a
+  `try/catch` so a failed save **never breaks the game**. Fire-and-forget (not awaited in `next()`).
+- **`ProgressPage`** (`src/pages/ProgressPage.jsx`, behind `ProtectedRoute`) — an `observer` that
+  fetches `getUserProgress(authStore.user.id)` once on mount with local `useState`, and renders one
+  of four states: **loading** (Loader), **error** (red text), **empty** ("No games yet"), or a
+  **list** of result Cards (`score / total` + date). Uses an `active` cleanup flag.
+- **The catch (still open):** `game_results` needs a REAL Supabase auth session (`auth.uid() =
+  user_id` RLS + `user_id → profiles` FK). Ilan's auth is still a **localStorage mock**, so a
+  mock-logged-in save currently **fails gracefully** (logged, game unaffected) and Progress shows
+  the empty state. Real persistence lights up when Ilan wires real Supabase auth. `topic`/`level`
+  saved as `null` because a round mixes them (columns nullable).
 
 ---
 
