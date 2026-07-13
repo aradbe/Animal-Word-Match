@@ -49,7 +49,7 @@ class GameStore {
                 this.bestStreak = 0
                 this.status = 'playing'
             })   
-        } catch(err) {
+        } catch {
             runInAction(() => {
                 this.error = 'Could not load questions. Please try again.'
                 this.status = 'error'
