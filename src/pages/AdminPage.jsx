@@ -189,7 +189,7 @@ function AdminPage() {
   return (
     <Container size="lg" py="xl">
       <Stack gap="lg">
-        <Group justify="space-between" align="flex-start">
+        <Group justify="space-between" align="flex-start" w="100%" maw={980} mx="auto">
           <div>
             <Title order={1}>Admin Dashboard</Title>
             <Text c="dimmed" fw={600}>
@@ -205,8 +205,8 @@ function AdminPage() {
         {error && <Alert color="red">{error}</Alert>}
         {successMessage && <Alert color="green">{successMessage}</Alert>}
 
-        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-          <Card shadow="sm" radius="lg" padding="lg" withBorder>
+        <Stack gap="lg" align="center">
+          <Card shadow="sm" radius="lg" padding="lg" withBorder w="100%" maw={980}>
             <form onSubmit={handleSubmit}>
               <Stack>
                 <Title order={2} size="h3">
@@ -282,7 +282,7 @@ function AdminPage() {
             </form>
           </Card>
 
-          <Card shadow="sm" radius="lg" padding="lg" withBorder>
+          <Card shadow="sm" radius="lg" padding="lg" withBorder w="100%" maw={980}>
             <Stack>
               <Group justify="space-between">
                 <Title order={2} size="h3">
@@ -351,7 +351,7 @@ function AdminPage() {
               )}
             </Stack>
           </Card>
-        </SimpleGrid>
+        </Stack>
       </Stack>
     </Container>
   );
