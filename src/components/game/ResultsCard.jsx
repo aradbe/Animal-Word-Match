@@ -1,6 +1,26 @@
 import { Card, Stack, Title, Text, Badge, Button } from '@mantine/core'
+import { useEffect } from 'react'
+import confetti from 'canvas-confetti'
 
-function ResultsCard({ score, total, bestStreak, onPlayAgain }) {
+function ResultsCard({ score, total, bestStreak, onPlayAgain, onBackToMenu }) {
+
+    useEffect(() => {
+        // Skip the animation for users who prefer reduced motion.
+        if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+
+        // Only celebrate a good round (half or better).
+        const ratio = total > 0 ? score / total : 0
+        if (ratio < 0.5) return
+
+        // A perfect score gets a bigger burst.
+        const isPerfect = score === total
+        confetti({
+            particleCount: isPerfect ? 200 : 120,
+            spread: isPerfect ? 100 : 70,
+            origin: { y: 0.6 },
+        })
+    }, [score, total])
+
     return (
         <Card shadow="sm" padding="xl" radius="md" withBorder>
             <Stack align="center" gap="md">
@@ -14,9 +34,14 @@ function ResultsCard({ score, total, bestStreak, onPlayAgain }) {
                     Best streak: {bestStreak}
                 </Badge>
 
-                <Button size="md" onClick={onPlayAgain}>
-                    Play again
-                </Button>
+                <Stack w="100%" gap="sm">
+                    <Button size="md" fullWidth onClick={onPlayAgain}>
+                        Play again
+                    </Button>
+                    <Button size="md" fullWidth variant="light" onClick={onBackToMenu}>
+                        Back to menu
+                    </Button>
+                </Stack>
             </Stack>
         </Card>
     )

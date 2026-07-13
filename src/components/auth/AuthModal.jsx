@@ -4,6 +4,7 @@ import { useState } from "react";
 import { observer } from "mobx-react-lite";
 import {
   Alert,
+  Anchor,
   Button,
   Modal,
   PasswordInput,
@@ -141,11 +142,11 @@ function AuthModal({ opened, onClose, onAuthSuccess, initialMode = "login" }) {
             {isSignup ? "Sign up" : "Login"}
           </Button>
 
-          <Text size="sm">
+          <Text size="sm" ta="center">
             {isSignup ? "Already have an account?" : "Need an account?"}{" "}
-            <button type="button" onClick={switchMode}>
+            <Anchor component="button" type="button" fw={700} onClick={switchMode}>
               {isSignup ? "Login" : "Sign up"}
-            </button>
+            </Anchor>
           </Text>
         </Stack>
       </form>

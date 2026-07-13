@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
+import { useNavigate } from 'react-router-dom'
 import { Container, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
 import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
@@ -7,6 +8,7 @@ import QuestionCard from './QuestionCard'
 import AnswerButton from './AnswerButton'
 import ScoreBar from './ScoreBar'
 import ResultsCard from './ResultsCard'
+import './GamePage.css'
 
 // An observer component that just displays the store and calls its actions
 
@@ -21,8 +23,14 @@ import ResultsCard from './ResultsCard'
 */
 
 const GamePage = observer(function GamePage() {
+    const navigate = useNavigate()
+    const startedRef = useRef(false)
 
     useEffect(() => {
+        // Guard against React StrictMode running this effect twice in dev,
+        // which would fetch two different random rounds and flash the image.
+        if (startedRef.current) return
+        startedRef.current = true
         gameStore.startRound()
     }, [])
 
@@ -73,6 +81,7 @@ const GamePage = observer(function GamePage() {
                     total={gameStore.totalQuestions}
                     bestStreak={gameStore.bestStreak}
                     onPlayAgain={() => gameStore.startRound()}
+                    onBackToMenu={() => navigate('/')}
                 />
             </Container>
         )
@@ -85,23 +94,28 @@ const GamePage = observer(function GamePage() {
     return (
         <Container size="sm" py="xl">
             <Stack gap="lg">
+                <Button variant="subtle" onClick={() => navigate('/')} style={{ alignSelf: 'flex-start' }}>
+                    ← Menu
+                </Button>
                 <ScoreBar score={gameStore.score} streak={gameStore.streak}/>
                 <Text ta="center" fw={500} c="dimmed">
                     Question {gameStore.currentIndex + 1} of {gameStore.totalQuestions}
                 </Text>
 
-                <QuestionCard question={question} />
+                <Stack key={gameStore.currentIndex} gap="lg" className="awm-question">
+                    <QuestionCard question={question} />
 
-                <Stack gap="sm">
-                    {answers.map((word) => (
-                        <AnswerButton
-                            key={word}
-                            word={word}
-                            status={getStatus(word)}
-                            disabled={gameStore.answered}
-                            onSelect={(w) => gameStore.selectAnswer(w)}
-                        />
-                    ))}
+                    <Stack gap="sm">
+                        {answers.map((word) => (
+                            <AnswerButton
+                                key={word}
+                                word={word}
+                                status={getStatus(word)}
+                                disabled={gameStore.answered}
+                                onSelect={(w) => gameStore.selectAnswer(w)}
+                            />
+                        ))}
+                    </Stack>
                 </Stack>
 
                 {gameStore.answered && (
@@ -109,7 +123,7 @@ const GamePage = observer(function GamePage() {
                         <Text fw={700} c={gameStore.selected === question.correct_word ? 'green' : 'red'}>
                             {gameStore.selected === question.correct_word ? 'Correct!' : 'Oops, wrong!'}
                         </Text>
-                        <Button onClick={() => gameStore.next()} size="md">
+                        <Button onClick={() => gameStore.next()} size="md" fullWidth>
                             {gameStore.isLast ? 'Finish' : 'Next'}
                         </Button>
                     </Stack>
