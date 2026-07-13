@@ -1,0 +1,22 @@
+@keyframes awm-pulse {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.06); }
+    100% { transform: scale(1); }
+}
+
+@keyframes awm-shake {
+    0%, 100% { transform: translateX(0); }
+    20%      { transform: translateX(-6px); }
+    40%      { transform: translateX(6px); }
+    60%      { transform: translateX(-4px); }
+    80%      { transform: translateX(4px); }
+}
+
+.answer-correct { animation: awm-pulse 0.4s ease; }
+.answer-wrong   { animation: awm-shake 0.45s ease; }
+
+/* Respect users who prefer no motion */
+@media (prefers-reduced-motion: reduce) {
+    .answer-correct,
+    .answer-wrong { animation: none; }
+}
