@@ -2,7 +2,7 @@ import { Button } from '@mantine/core'
 import './AnswerButton.css'
 
 const STATUS_PROPS = {
-    idle:    { variant: 'outline', color: 'brandTeal' },
+    idle:    { variant: 'default' },
     correct: { color: 'green' },
     wrong:   { color: 'red' },
     muted:   { variant: 'default' },
@@ -15,10 +15,16 @@ const ANIM_CLASS = {
 }
 
 function AnswerButton({ word, onSelect, disabled, status = 'idle' }) {
+    const className = [
+        'answer-button',
+        `answer-button-${status}`,
+        ANIM_CLASS[status],
+    ].filter(Boolean).join(' ')
+
     return (
         <Button
             {...STATUS_PROPS[status]}
-            className={ANIM_CLASS[status]}
+            className={className}
             onClick={() => onSelect(word)}
             fullWidth
             size="lg"

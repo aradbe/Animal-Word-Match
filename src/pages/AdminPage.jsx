@@ -3,6 +3,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 import {
   Alert,
@@ -18,6 +19,7 @@ import {
   Text,
   Title,
 } from "@mantine/core";
+import { useMediaQuery } from "@mantine/hooks";
 
 import {
   deleteQuestion,
@@ -71,6 +73,12 @@ function getErrorMessage(error) {
 }
 
 function AdminPage() {
+  const navigate = useNavigate();
+
+  const isMobile = useMediaQuery(
+    "(max-width: 48em)",
+  );
+
   const [topic, setTopic] =
     useState("farm");
 
@@ -123,7 +131,14 @@ function AdminPage() {
     }, []);
 
   useEffect(() => {
-    loadQuestions();
+    const loadTimer =
+      window.setTimeout(() => {
+        loadQuestions();
+      }, 0);
+
+    return () => {
+      window.clearTimeout(loadTimer);
+    };
   }, [loadQuestions]);
 
   function clearMessages() {
@@ -250,6 +265,24 @@ function AdminPage() {
       py="xl"
     >
       <Stack gap="lg">
+        <Group
+          w="100%"
+          maw={980}
+          mx="auto"
+          justify="flex-start"
+        >
+          <Button
+            variant="light"
+            color="brandTeal"
+            onClick={() => navigate("/")}
+            style={{
+              fontWeight: 800,
+            }}
+          >
+            Back to menu
+          </Button>
+        </Group>
+
         <Group
           justify="space-between"
           align="flex-start"
@@ -417,6 +450,108 @@ function AdminPage() {
                 <Text c="dimmed">
                   No questions yet.
                 </Text>
+              ) : isMobile ? (
+                <Stack gap="sm">
+                  {questions.map(
+                    (question) => (
+                      <Card
+                        key={question.id}
+                        withBorder
+                        radius="md"
+                        padding="sm"
+                      >
+                        <Stack gap="sm">
+                          <Group
+                            align="flex-start"
+                            wrap="nowrap"
+                          >
+                            <Image
+                              src={
+                                question.image_url
+                              }
+                              alt={
+                                question.correct_word
+                              }
+                              w={88}
+                              h={66}
+                              radius="md"
+                              fit="cover"
+                            />
+
+                            <Stack
+                              gap={4}
+                              flex={1}
+                            >
+                              <Text
+                                fw={700}
+                                style={{
+                                  wordBreak:
+                                    "break-word",
+                                }}
+                              >
+                                {
+                                  question.correct_word
+                                }
+                              </Text>
+
+                              <Text
+                                size="xs"
+                                c="dimmed"
+                                style={{
+                                  wordBreak:
+                                    "break-word",
+                                }}
+                              >
+                                {question.distractors.join(
+                                  ", ",
+                                )}
+                              </Text>
+
+                              <Group gap="xs">
+                                <Badge variant="light">
+                                  {
+                                    question.topic
+                                  }
+                                </Badge>
+
+                                <Badge
+                                  color="gray"
+                                  variant="light"
+                                >
+                                  Level{" "}
+                                  {
+                                    question.level
+                                  }
+                                </Badge>
+                              </Group>
+                            </Stack>
+                          </Group>
+
+                          <Button
+                            fullWidth
+                            size="xs"
+                            color="coral"
+                            variant="light"
+                            loading={
+                              deletingId ===
+                              question.id
+                            }
+                            disabled={
+                              actionInProgress
+                            }
+                            onClick={() =>
+                              handleDelete(
+                                question,
+                              )
+                            }
+                          >
+                            Delete
+                          </Button>
+                        </Stack>
+                      </Card>
+                    ),
+                  )}
+                </Stack>
               ) : (
                 <Table.ScrollContainer
                   minWidth={720}
