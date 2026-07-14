@@ -6,6 +6,74 @@
 
 .awm-question {
     animation: awm-question-in 0.35s ease both;
+    width: min(100%, 760px);
+    margin-inline: auto;
+}
+
+.awm-game-container {
+    min-height: 100vh;
+}
+
+.awm-menu-button {
+    border: 1px solid var(--mantine-color-brandTeal-5);
+    background: var(--mantine-color-brandTeal-0);
+    color: var(--mantine-color-brandTeal-8);
+    font-weight: 800;
+}
+
+.awm-menu-button:hover {
+    background: var(--mantine-color-brandTeal-1);
+}
+
+.awm-question-count {
+    font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+}
+
+.awm-question-image-frame {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    max-height: 420px;
+    overflow: hidden;
+    border-radius: var(--mantine-radius-lg);
+    background: #fff8ea;
+}
+
+.awm-question-image-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+}
+
+.awm-answers-grid {
+    width: 100%;
+}
+
+.awm-score-row {
+    width: 100%;
+}
+
+.awm-score-badge {
+    min-height: 34px;
+    padding-inline: 16px;
+    font-size: 0.95rem;
+}
+
+@media (max-width: 48em) {
+    .awm-game-container {
+        padding-top: 12px;
+        padding-bottom: 12px;
+    }
+
+    .awm-question {
+        width: 100%;
+    }
+
+    .awm-question-image-frame {
+        aspect-ratio: 16 / 9;
+        max-height: 30vh;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

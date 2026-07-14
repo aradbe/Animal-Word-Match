@@ -19,6 +19,10 @@ function ResultsCard({ score, total, bestStreak, onPlayAgain, onBackToMenu }) {
             spread: isPerfect ? 100 : 70,
             origin: { y: 0.6 },
         })
+
+        return () => {
+            confetti.reset?.()
+        }
     }, [score, total])
 
     return (

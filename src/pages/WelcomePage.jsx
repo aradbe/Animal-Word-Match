@@ -19,7 +19,7 @@ function WelcomePage() {
   const navigate = useNavigate();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalKey, setAuthModalKey] = useState(0);
-
+  const displayName = authStore.profile?.display_name || authStore.user?.email;
   function handleStartGame() {
     navigate("/game");
   }
@@ -87,6 +87,7 @@ function WelcomePage() {
           <Stack gap="sm">
             {authStore.isLoggedIn ? (
               <>
+                <Text>Hi, {displayName}</Text>
                 <Button size="md" fullWidth onClick={handleStartGame}>
                   Start Game
                 </Button>

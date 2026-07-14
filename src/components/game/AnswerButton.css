@@ -15,6 +15,57 @@
 .answer-correct { animation: awm-pulse 0.4s ease; }
 .answer-wrong   { animation: awm-shake 0.45s ease; }
 
+.answer-button {
+    min-height: 54px;
+    border: 1px solid var(--mantine-color-brandTeal-5);
+    background: #fff;
+    color: var(--mantine-color-brandTeal-7);
+    font-weight: 800;
+}
+
+.answer-button:hover {
+    background: var(--mantine-color-brandTeal-0);
+}
+
+.answer-button .mantine-Button-label {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.15;
+}
+
+.answer-button-muted {
+    border-color: var(--mantine-color-gray-3);
+    color: var(--mantine-color-gray-6);
+    background: #fff;
+}
+
+.answer-button-correct {
+    border-color: var(--mantine-color-green-6);
+    background: var(--mantine-color-green-6);
+    color: #fff;
+}
+
+.answer-button-correct:hover {
+    background: var(--mantine-color-green-7);
+}
+
+.answer-button-wrong {
+    border-color: var(--mantine-color-red-6);
+    background: var(--mantine-color-red-6);
+    color: #fff;
+}
+
+.answer-button-wrong:hover {
+    background: var(--mantine-color-red-7);
+}
+
+@media (max-width: 48em) {
+    .answer-button {
+        min-height: 50px;
+        padding-inline: 8px;
+    }
+}
+
 /* Respect users who prefer no motion */
 @media (prefers-reduced-motion: reduce) {
     .answer-correct,

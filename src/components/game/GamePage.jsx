@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { observer } from 'mobx-react-lite'
 import { useNavigate } from 'react-router-dom'
-import { Container, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
+import { Container, SimpleGrid, Stack, Text, Title, Button, Loader, Center } from '@mantine/core'
 import { gameStore } from '../../stores/gameStore'
 import { shuffle } from '../../utils/shuffle'
 import QuestionCard from './QuestionCard'
@@ -92,20 +92,26 @@ const GamePage = observer(function GamePage() {
     }
 
     return (
-        <Container size="sm" py="xl">
-            <Stack gap="lg">
-                <Button variant="subtle" onClick={() => navigate('/')} style={{ alignSelf: 'flex-start' }}>
+        <Container size="md" py="md" className="awm-game-container">
+            <Stack gap="sm">
+                <Button
+                    variant="light"
+                    color="brandTeal"
+                    onClick={() => navigate('/')}
+                    className="awm-menu-button"
+                    style={{ alignSelf: 'center' }}
+                >
                     ← Menu
                 </Button>
                 <ScoreBar score={gameStore.score} streak={gameStore.streak}/>
-                <Text ta="center" fw={500} c="dimmed">
+                <Text ta="center" fw={700} c="dimmed" className="awm-question-count">
                     Question {gameStore.currentIndex + 1} of {gameStore.totalQuestions}
                 </Text>
 
-                <Stack key={gameStore.currentIndex} gap="lg" className="awm-question">
+                <Stack key={gameStore.currentIndex} gap="sm" className="awm-question">
                     <QuestionCard question={question} />
 
-                    <Stack gap="sm">
+                    <SimpleGrid cols={2} spacing="sm" className="awm-answers-grid">
                         {answers.map((word) => (
                             <AnswerButton
                                 key={word}
@@ -115,7 +121,7 @@ const GamePage = observer(function GamePage() {
                                 onSelect={(w) => gameStore.selectAnswer(w)}
                             />
                         ))}
-                    </Stack>
+                    </SimpleGrid>
                 </Stack>
 
                 {gameStore.answered && (
