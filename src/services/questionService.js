@@ -151,7 +151,7 @@ export async function generateQuestion(topic, level) {
        * Remove this tomorrow when testing
        * Gemini again.
        */
-      force_fallback: true,
+      // force_fallback: true,
     },
   });
 
